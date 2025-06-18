@@ -5,7 +5,7 @@ import threading
 
 app = FastAPI()
 
-def install_model_and_notify(model_path, callback_url):
+def install_model_and_notify(model_path, callback_url, install_id):
     try:
         AutoModelForCausalLM.from_pretrained(model_path)
         AutoTokenizer.from_pretrained(model_path)
@@ -29,9 +29,10 @@ async def install_model(request: Request):
     data = await request.json()
     model_path = data["model_path"]
     callback_url = data["callback_url"]
+    install_id = data.get("id")
 
     # Run model install in a new thread so API responds instantly
-    thread = threading.Thread(target=install_model_and_notify, args=(model_path, callback_url))
+    thread = threading.Thread(target=install_model_and_notify, args=(model_path, callback_url, install_id))
     thread.start()
 
     return {"status": "started", "message": f"Started installing {model_path}"}
