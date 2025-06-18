@@ -15,7 +15,7 @@ def install_model_and_notify(model_path, callback_url):
         print(f"Error during install: {e}")
 
     payload = {
-        "id": install_id
+        "id": install_id,
         "status": status
     }
 
