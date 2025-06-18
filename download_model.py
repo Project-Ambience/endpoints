@@ -9,17 +9,16 @@ def install_model_and_notify(model_path, callback_url):
     try:
         AutoModelForCausalLM.from_pretrained(model_path)
         AutoTokenizer.from_pretrained(model_path)
-        status = "success"
-        message = f"Model {model_path} installed successfully."
+        status = "success" 
     except Exception as e:
         status = "fail"
-        message = str(e)
+        print(f"Error during install: {e}")
 
     payload = {
-        "model_path": model_path,
-        "status": status,
-        "message": message
+        "id": install_id
+        "status": status
     }
+
     try:
         requests.post(callback_url, json=payload)
     except Exception as e:
@@ -36,6 +35,3 @@ async def install_model(request: Request):
     thread.start()
 
     return {"status": "started", "message": f"Started installing {model_path}"}
-
-
-
