@@ -29,14 +29,14 @@ class Med42Handler:
 
 def main():
     model_path = "m42-health/Llama3-Med42-8B"
-    device = "hpu"
+    device = "cpu"
 
     print(f"Loading Med42 model from {model_path} on device {device} ...")
     handler = Med42Handler(model_path, device)
     print("Model loaded. Waiting for prompts...")
 
     # RabbitMQ details (guest/guest, host: rabbitmq, port: 5672)
-    rabbitmq_host = "rabbitmq"
+    rabbitmq_host = "128.16.12.219"
     rabbitmq_port = 5672
     rabbitmq_user = "guest"
     rabbitmq_pass = "guest"
@@ -52,8 +52,8 @@ def main():
         )
     )
     channel = connection.channel()
-    channel.queue_declare(queue=input_queue)
-    channel.queue_declare(queue=output_queue)
+    channel.queue_declare(queue=input_queue, durable=True)
+    channel.queue_declare(queue=output_queue, durable=True)
     channel.basic_qos(prefetch_count=1)
 
     def on_message(ch, method, properties, body):
