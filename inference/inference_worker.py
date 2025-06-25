@@ -29,7 +29,7 @@ class Med42Handler:
 
 def main():
     model_path = "m42-health/Llama3-Med42-8B"
-    device = "cpu"
+    device = "hpu"
 
     print(f"Loading Med42 model from {model_path} on device {device} ...")
     handler = Med42Handler(model_path, device)
@@ -67,12 +67,12 @@ def main():
                 "request_id": message.get("request_id"),
                 "result": result,
             }
-            #ch.basic_publish(
-            #    exchange="",
-            #    routing_key=output_queue,
-            #    body=json.dumps(response),
-            #)
-            print(f"[Would send to output_queue] {json.dumps(response)}")
+            ch.basic_publish(
+                exchange="",
+                routing_key=output_queue,
+                body=json.dumps(response),
+            )
+            print("Result sent to output queue")
         except Exception as e:
             print("Error during inference or message handling:", e)
         finally:
