@@ -64,7 +64,7 @@ def main():
             result = handler.infer(prompt)
             print(f"Result: {result!r}")
             response = {
-                "request_id": message.get("request_id"),
+                "conversation_id": message.get("conversation_id"),
                 "result": result,
             }
             ch.basic_publish(
