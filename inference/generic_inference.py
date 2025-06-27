@@ -1,9 +1,10 @@
 import pika
 import json
-from transformers import pipeline as hf_pipeline
+from transformers import pipeline as hf_pipeline, AutoModelForCausalLM, AutoTokenizer
 import torch
 
-class GenericHFHandler:
+# PipelineHandler: for Med42, Llama, Mistral, etc.
+class PipelineHandler:
     def __init__(self, model_path, device):
         self.pipe = hf_pipeline(
             "text-generation",
@@ -13,10 +14,71 @@ class GenericHFHandler:
         )
         self.tokenizer = self.pipe.tokenizer
 
+    @property
+    def default_generation_args(self):
+        return {
+            "max_new_tokens": 512,
+            "do_sample": True,
+            "temperature": 0.4,
+            "top_k": 150,
+            "top_p": 0.75,
+        }
+
     def infer(self, prompt, **generation_args):
+        # Use handler's defaults if not specified
+        if not generation_args:
+            generation_args = self.default_generation_args
         outputs = self.pipe(prompt, **generation_args)
         generated = outputs[0]["generated_text"]
         return generated[len(prompt):] if generated.startswith(prompt) else generated
+
+# ChatHandler: for Granite 3.3 Instruct and similar chat/instruct models
+class ChatHandler:
+    def __init__(self, model_path, device):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+        )
+        self.device = device
+
+    @property
+    def default_generation_args(self):
+        return {
+            "max_new_tokens": 512,
+            # No sampling for most instruct models (greedy by default)
+        }
+
+    def infer(self, prompt, **generation_args):
+        if not generation_args:
+            generation_args = self.default_generation_args
+        eos_token_id = self.tokenizer.eos_token_id
+        generation_args.setdefault("pad_token_id", eos_token_id)
+        generation_args.setdefault("eos_token_id", eos_token_id)
+        if isinstance(prompt, str):
+            prompt = [{"role": "user", "content": prompt}]
+        inputs = self.tokenizer.apply_chat_template(
+            prompt,
+            return_tensors="pt",
+            return_dict=True,
+            add_generation_prompt=True
+        )
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        outputs = self.model.generate(
+            input_ids=inputs["input_ids"],
+            attention_mask=inputs.get("attention_mask"),
+            **generation_args
+        )
+        result = self.tokenizer.decode(
+            outputs[0, inputs["input_ids"].shape[1]:],
+            skip_special_tokens=True
+        )
+        return result
+
+def needs_chat_handler(model_path):
+    # Use ChatHandler for instruct/chat models (like Granite 3.3 Instruct)
+    return "instruct" in model_path.lower() or "chat" in model_path.lower()
 
 def main():
     # RabbitMQ details
@@ -40,32 +102,29 @@ def main():
     channel.queue_declare(queue=output_queue, durable=True)
     channel.basic_qos(prefetch_count=1)
 
-    # Cache for loaded models
     handler_cache = {}
 
     def get_handler(model_path, device):
         key = (model_path, device)
         if key not in handler_cache:
             print(f"Loading model: {model_path} on {device}")
-            handler_cache[key] = GenericHFHandler(model_path, device)
+            if needs_chat_handler(model_path):
+                handler_cache[key] = ChatHandler(model_path, device)
+            else:
+                handler_cache[key] = PipelineHandler(model_path, device)
         return handler_cache[key]
 
     def on_message(ch, method, properties, body):
         try:
             message = json.loads(body)
             prompt = message["prompt"]
-            model_path = message.get("model_path", "m42-health/Llama3-Med42-8B")
+            model_path = message.get("model_path", "ibm-granite/granite-3.3-8b-instruct") 
             device = message.get("device", "hpu")
-            generation_args = message.get("generation_args", {
-                "max_new_tokens": 512,
-                "do_sample": True,
-                "temperature": 0.4,
-                "top_k": 150,
-                "top_p": 0.75,
-            })
+            handler = get_handler(model_path, device)
+            # Use handler's defaults unless message overrides
+            generation_args = message.get("generation_args", handler.default_generation_args)
 
             print(f"Received prompt for model: {model_path}")
-            handler = get_handler(model_path, device)
             result = handler.infer(prompt, **generation_args)
             print(f"Result: {result!r}")
 
