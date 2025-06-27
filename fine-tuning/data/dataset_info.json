@@ -1,0 +1,10 @@
+{
+    "medical_finetune_test_data": {
+      "file_name": "medical_finetune_test_data.json",
+      "columns": {
+        "prompt":   "instruction",
+        "query":    "input",
+        "response": "output"
+      }
+    }
+  }
