@@ -16,8 +16,8 @@ conversation = [
     {
         "role": "user",
         "content": [
-            {"type": "image", "url": img_path},
-            {"type": "text", "text": "What is the highest scoring model on ChartQA and what is its score?"},
+            {"type": "image", "url": "/app/endpoints/inference/images/xray.jpg"},
+            {"type": "text", "text": "What abnormalities are visible in this chest X-ray?"},
         ],
     },
 ]
