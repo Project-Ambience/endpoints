@@ -1,9 +1,64 @@
 import pika
 import json
-from transformers import pipeline as hf_pipeline, AutoModelForCausalLM, AutoTokenizer
+from transformers import pipeline as hf_pipeline, AutoModelForCausalLM, AutoTokenizer, AutoProcessor, AutoModelForVision2Seq
+import os
 import torch
+import mimetypes
 
-# PipelineHandler: for Med42, Llama, Mistral, etc.
+HF_CACHE_PREFIX = "/models"
+
+def resolve_model_path(model_path): 
+    safe_name = model_path.replace("/", "--")
+    local_path = os.path.join(HF_CACHE_PREFIX, f"models--{safe_name}")
+    if os.path.exists(local_path):
+        return local_path
+    else:
+        return model_path
+
+def is_image_file(filepath):
+    mime, _ = mimetypes.guess_type(filepath)
+    return mime is not None and mime.startswith("image")
+
+def is_text_file(filepath):
+    mime, _ = mimetypes.guess_type(filepath)
+    return mime is not None and mime.startswith("text")
+
+def parse_input(input_list, is_vision_model=False): 
+    user_prompt = ""
+    file_text = None
+    file_path = None
+
+    for item in input_list:
+        if "prompt" in item:
+            user_prompt = item["prompt"]
+        if "file" in item:
+            file_path = item["file"]
+
+    if file_path:
+        if is_vision_model and is_image_file(file_path):
+            # For vision models: return multimodal chat format
+            return [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "url": file_path},
+                        {"type": "text", "text": user_prompt}
+                    ]
+                }
+            ]
+        elif not is_vision_model and is_text_file(file_path):
+            # For text models: append file contents to prompt
+            try:
+                with open(file_path, "r") as f:
+                    file_text = f.read()
+            except Exception as e:
+                print(f"Error reading file {file_path}: {e}")
+                file_text = ""
+            return user_prompt + "\n" + file_text if file_text else user_prompt
+
+    # Default: return user prompt
+    return user_prompt
+
 class PipelineHandler:
     def __init__(self, model_path, device):
         self.pipe = hf_pipeline(
@@ -32,7 +87,6 @@ class PipelineHandler:
         generated = outputs[0]["generated_text"]
         return generated[len(prompt):] if generated.startswith(prompt) else generated
 
-# ChatHandler: for Granite 3.3 Instruct and similar chat/instruct models
 class ChatHandler:
     def __init__(self, model_path, device):
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -46,8 +100,7 @@ class ChatHandler:
     @property
     def default_generation_args(self):
         return {
-            "max_new_tokens": 512,
-            # No sampling for most instruct models (greedy by default)
+            "max_new_tokens": 512, 
         }
 
     def infer(self, prompt, **generation_args):
@@ -76,9 +129,35 @@ class ChatHandler:
         )
         return result
 
+class VisionHandler:
+    def __init__(self, model_path, device):
+        self.processor = AutoProcessor.from_pretrained(model_path)
+        self.model = AutoModelForVision2Seq.from_pretrained(model_path).to(device)
+        self.device = device
+
+    @property
+    def default_generation_args(self):
+        return {
+            "max_new_tokens": 100,
+        }
+
+    def infer(self, prompt, **generation_args):
+        # prompt is the conversation format (list of dicts)
+        inputs = self.processor.apply_chat_template(
+            prompt,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt"
+        ).to(self.device)
+        output = self.model.generate(**inputs, **generation_args)
+        return self.processor.decode(output[0], skip_special_tokens=True)
+
 def needs_chat_handler(model_path):
-    # Use ChatHandler for instruct/chat models (like Granite 3.3 Instruct)
     return "instruct" in model_path.lower() or "chat" in model_path.lower()
+
+def is_vision_handler(model_path):
+    return "vision" in model_path.lower()
 
 def main():
     # RabbitMQ details
@@ -108,7 +187,9 @@ def main():
         key = (model_path, device)
         if key not in handler_cache:
             print(f"Loading model: {model_path} on {device}")
-            if needs_chat_handler(model_path):
+            if is_vision_handler(model_path):
+                handler_cache[key] = VisionHandler(model_path, device)
+            elif needs_chat_handler(model_path):
                 handler_cache[key] = ChatHandler(model_path, device)
             else:
                 handler_cache[key] = PipelineHandler(model_path, device)
@@ -117,15 +198,20 @@ def main():
     def on_message(ch, method, properties, body):
         try:
             message = json.loads(body)
-            prompt = message["prompt"]
-            model_path = message.get("model_path", "ibm-granite/granite-3.3-8b-instruct") 
-            device = message.get("device", "hpu")
+            input_list = message["input"]
+            model_path = resolve_model_path(message["model_path"])
+            device = "hpu"
             handler = get_handler(model_path, device)
+
+            if is_vision_handler(model_path):
+                parsed_prompt = parse_input(input_list, is_vision_model=True)
+            else:
+                parsed_prompt = parse_input(input_list, is_vision_model=False)
+            
             # Use handler's defaults unless message overrides
             generation_args = message.get("generation_args", handler.default_generation_args)
-
             print(f"Received prompt for model: {model_path}")
-            result = handler.infer(prompt, **generation_args)
+            result = handler.infer(parsed_prompt, **generation_args)
             print(f"Result: {result!r}")
 
             response = {
