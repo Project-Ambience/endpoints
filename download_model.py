@@ -2,6 +2,9 @@ from fastapi import FastAPI, Request
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import requests
 import threading
+import os
+
+os.environ["TRANSFORMERS_CACHE"] = "/models"
 
 app = FastAPI()
 
