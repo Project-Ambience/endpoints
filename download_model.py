@@ -1,17 +1,16 @@
 from fastapi import FastAPI, Request
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from huggingface_hub import snapshot_download
 import requests
 import threading
 import os
 
-os.environ["TRANSFORMERS_CACHE"] = "/models"
+HF_CACHE = "/models"
 
 app = FastAPI()
 
 def install_model_and_notify(model_path, callback_url, install_id):
     try:
-        AutoModelForCausalLM.from_pretrained(model_path)
-        AutoTokenizer.from_pretrained(model_path)
+        snapshot_download(repo_id=model_path, cache_dir=HF_CACHE, resume_download=True, local_files_only=False) 
         status = "success" 
     except Exception as e:
         status = "fail"
