@@ -1,19 +1,15 @@
+import os
+os.environ["HF_HOME"] = "/models"
+
 import pika
 import json
 from transformers import pipeline as hf_pipeline, AutoModelForCausalLM, AutoTokenizer, AutoProcessor, AutoModelForVision2Seq
-import os
+import transformers
+print("Transformers cache dir:", transformers.utils.default_cache_path)
 import torch
 import mimetypes
 
 HF_CACHE_PREFIX = "/models"
-
-def resolve_model_path(model_path): 
-    safe_name = model_path.replace("/", "--")
-    local_path = os.path.join(HF_CACHE_PREFIX, f"models--{safe_name}")
-    if os.path.exists(local_path):
-        return local_path
-    else:
-        return model_path
 
 def is_image_file(filepath):
     mime, _ = mimetypes.guess_type(filepath)
@@ -199,7 +195,7 @@ def main():
         try:
             message = json.loads(body)
             input_list = message["input"]
-            model_path = resolve_model_path(message["model_path"])
+            model_path = message["model_path"]
             device = "hpu"
             handler = get_handler(model_path, device)
 
