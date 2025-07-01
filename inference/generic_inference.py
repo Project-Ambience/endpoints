@@ -8,6 +8,13 @@ import transformers
 print("Transformers cache dir:", transformers.utils.default_cache_path)
 import torch
 import mimetypes
+import requests
+from io import BytesIO
+
+try:
+    from PyPDF2 import PdfReader
+except ImportError:
+    PdfReader = None
 
 HF_CACHE_PREFIX = "/models"
 
@@ -18,6 +25,16 @@ def is_image_file(filepath):
 def is_text_file(filepath):
     mime, _ = mimetypes.guess_type(filepath)
     return mime is not None and mime.startswith("text")
+
+def extract_text_from_pdf(file_obj):
+    if PdfReader is None:
+        print("PyPDF2 not installed, can't extract PDF text")
+        return ""
+    reader = PdfReader(file_obj)
+    text = []
+    for page in reader.pages:
+        text.append(page.extract_text())
+    return "\n".join(text)
 
 def parse_input(input_list, is_vision_model=False): 
     user_prompt = ""
@@ -42,17 +59,35 @@ def parse_input(input_list, is_vision_model=False):
                     ]
                 }
             ]
-        elif not is_vision_model and is_text_file(file_path):
+        elif not is_vision_model: 
             # For text models: append file contents to prompt
             try:
-                with open(file_path, "r") as f:
-                    file_text = f.read()
+                # Handle remote URLs or local files
+                if file_path.startswith("http://") or file_path.startswith("https://"):
+                    response = requests.get(file_path)
+                    response.raise_for_status()
+                    mime = response.headers.get('Content-Type', '')
+                    if 'text' in mime:
+                        file_text = response.text
+                    elif 'pdf' in mime and PdfReader:
+                        file_text = extract_text_from_pdf(BytesIO(response.content))
+                    else:
+                        file_text = ""
+                else:
+                    mime, _ = mimetypes.guess_type(file_path)
+                    if mime and 'text' in mime:
+                        with open(file_path, "r") as f:
+                            file_text = f.read()
+                    elif mime and 'pdf' in mime and PdfReader:
+                        with open(file_path, "rb") as f:
+                            file_text = extract_text_from_pdf(f)
+                    else:
+                        file_text = "" 
             except Exception as e:
                 print(f"Error reading file {file_path}: {e}")
                 file_text = ""
             return user_prompt + "\n" + file_text if file_text else user_prompt
 
-    # Default: return user prompt
     return user_prompt
 
 class PipelineHandler:
