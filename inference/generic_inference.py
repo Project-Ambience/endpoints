@@ -239,6 +239,11 @@ def main():
             input_list = message["input"]
             model_path = message["model_path"]
             device = "hpu"
+
+            if not model_path or not isinstance(model_path, str):
+                print("Error: model_path is None or invalid in message:", message)
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+                return
             handler = get_handler(model_path, device)
 
             if is_vision_handler(model_path):
