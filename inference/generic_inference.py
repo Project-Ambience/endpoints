@@ -16,77 +16,84 @@ try:
 except ImportError:
     PdfReader = None
 
-HF_CACHE_PREFIX = "/models"
-
 def is_image_file(filepath):
     mime, _ = mimetypes.guess_type(filepath)
     return mime is not None and mime.startswith("image")
-
-def is_text_file(filepath):
-    mime, _ = mimetypes.guess_type(filepath)
-    return mime is not None and mime.startswith("text")
 
 def extract_text_from_pdf(file_obj):
     if PdfReader is None:
         print("PyPDF2 not installed, can't extract PDF text")
         return ""
-    reader = PdfReader(file_obj)
-    text = []
-    for page in reader.pages:
-        text.append(page.extract_text())
-    return "\n".join(text)
+    try:
+        reader = PdfReader(file_obj)
+        return "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
+    except Exception as e:
+        print(f"PDF extraction failed: {e}")
+        return ""
 
-def parse_input(input_list, is_vision_model=False): 
+def get_file_path(input_list):
     user_prompt = ""
-    file_text = None
     file_path = None
-
     for item in input_list:
         if "prompt" in item:
             user_prompt = item["prompt"]
-        if "file" in item:
+        # Prefer file_url if both are present
+        if "file_url" in item:
+            file_path = item["file_url"]
+        elif "file" in item and not file_path:
             file_path = item["file"]
+    return user_prompt, file_path
 
-    if file_path:
-        if is_vision_model and is_image_file(file_path):
-            # For vision models: return multimodal chat format
-            return [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "url": file_path},
-                        {"type": "text", "text": user_prompt}
-                    ]
-                }
-            ]
-        elif not is_vision_model: 
-            # For text models: append file contents to prompt
-            try:
-                # Handle remote URLs or local files
-                if file_path.startswith("http://") or file_path.startswith("https://"):
-                    response = requests.get(file_path)
-                    response.raise_for_status()
-                    mime = response.headers.get('Content-Type', '')
-                    if 'text' in mime:
-                        file_text = response.text
-                    elif 'pdf' in mime and PdfReader:
-                        file_text = extract_text_from_pdf(BytesIO(response.content))
-                    else:
-                        file_text = ""
+def parse_input(input_list, is_vision_model=False): 
+    user_prompt, file_path = get_file_path(input_list)
+    file_text = None
+
+    if not file_path:
+        return user_prompt
+
+    if is_vision_model and is_image_file(file_path):
+        # For vision models: return multimodal chat format
+        return [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "url": file_path},
+                    {"type": "text", "text": user_prompt}
+                ]
+            }
+        ]
+    elif not is_vision_model: 
+        # For text models: append file contents to prompt
+        try:
+            # Handle remote URLs or local files
+            if file_path.startswith("http"):
+                response = requests.get(file_path)
+                response.raise_for_status()
+                mime = response.headers.get('Content-Type', '')
+                if "pdf" in mime and PdfReader:
+                    file_text = extract_text_from_pdf(BytesIO(response.content))
+                    print(f"Extracted PDF text (url): {file_text[:100]}")
+                elif 'text' in mime:
+                    file_text = response.text
+                    print(f"Extracted text file (url): {file_text[:100]}")
                 else:
-                    mime, _ = mimetypes.guess_type(file_path)
-                    if mime and 'text' in mime:
-                        with open(file_path, "r") as f:
-                            file_text = f.read()
-                    elif mime and 'pdf' in mime and PdfReader:
-                        with open(file_path, "rb") as f:
-                            file_text = extract_text_from_pdf(f)
-                    else:
-                        file_text = "" 
-            except Exception as e:
-                print(f"Error reading file {file_path}: {e}")
-                file_text = ""
-            return user_prompt + "\n" + file_text if file_text else user_prompt
+                    print(f"Unhandled mime type (url): {mime}")
+                    file_text = ""
+            else:
+                mime, _ = mimetypes.guess_type(file_path)
+                if mime and "pdf" in mime and PdfReader:
+                    with open(file_path, "rb") as f:
+                        file_text = extract_text_from_pdf(f) 
+                elif mime and "text" in mime:
+                    with open(file_path, "r") as f:
+                        file_text = f.read()
+                else:
+                    print(f"Unhandled mime type (local): {mime}")
+                    file_text = ""        
+        except Exception as e:
+            print(f"Error reading file {file_path}: {e}")
+            file_text = ""
+        return user_prompt + "\n" + (file_text or "")
 
     return user_prompt
 
@@ -232,6 +239,11 @@ def main():
             input_list = message["input"]
             model_path = message["model_path"]
             device = "hpu"
+
+            if not model_path or not isinstance(model_path, str):
+                print("Error: model_path is None or invalid in message:", message)
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+                return
             handler = get_handler(model_path, device)
 
             if is_vision_handler(model_path):
