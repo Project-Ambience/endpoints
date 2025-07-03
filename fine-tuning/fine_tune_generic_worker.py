@@ -7,15 +7,34 @@ import shutil
 import tempfile
 import requests
 import logging
+import torch
+import habana_frameworks.torch.distributed.hccl as hccl
 from transformers import AutoTokenizer
-from llamafactory.hparams import get_train_args
-from llamafactory.train.tuner import run_exp
+
 
 RABBIT_URL = os.environ.get("RABBIT_URL", "amqp://guest:guest@128.16.12.219:5672/")
 QUEUE_NAME = os.environ.get("QUEUE_NAME", "fine_tune_requests")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 root_logger = logging.getLogger()
+
+LLAMA_FACTORY_PATH = "/app/LLaMA-Factory"
+if os.path.exists(LLAMA_FACTORY_PATH):
+    sys.path.append(LLAMA_FACTORY_PATH)
+
+try:
+    from src.llamafactory.hparams import get_train_args
+    from src.llamafactory.train.tuner import run_exp
+except ImportError:
+    root_logger.error("LLaMA Factory not found. Please ensure it's installed in /app/LLaMA-Factory")
+    sys.exit(1)
+
+
+# world_size, rank, local_rank = hccl.initialize_distributed_hpu()
+# torch.distributed.init_process_group(backend="hccl")
+
+archive_root = "/app/endpoints/fine-tuning/finetune_runs"
+os.makedirs(archive_root, exist_ok=True)
 
 
 def process_message(ch, method, props, body):
@@ -47,7 +66,7 @@ def process_message(ch, method, props, body):
         status = "fail"
         error  = f"Model load failed: {e}"
         task_logger.error(error)
-        _send_callback(callback_url, req_id, status, error, task_logger)
+        # _send_callback(callback_url, req_id, status, error, task_logger)
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
@@ -60,7 +79,7 @@ def process_message(ch, method, props, body):
 
     data_dir = os.path.join(work_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
-    ds_name  = f"request_{req_id}"
+    ds_name  = f"dataset_{req_id}"
     data_file = os.path.join(data_dir, f"{ds_name}.json")
     with open(data_file, "w") as f:
         json.dump(examples, f, indent=2)
@@ -101,7 +120,7 @@ def process_message(ch, method, props, body):
         "save_only_model": False,
         "output_dir": os.path.join(work_dir, "out"),
         "overwrite_output_dir": True,
-        "fp16": True,
+        "bf16": True,
         "gradient_checkpointing": True,
         "ddp_backend": "gloo",
         "report_to": [],
@@ -115,15 +134,16 @@ def process_message(ch, method, props, body):
 
     try:
         task_logger.info("Starting fine-tuning run_exp()")
-        model_args, data_args, training_args, finetuning_args, generating_args = get_train_args()
-        run_exp(model_args, data_args, training_args, finetuning_args, generating_args)
+        run_exp()
         task_logger.info("Fine-tuning completed successfully.")
     except Exception as e:
         status = "fail"
         error  = str(e)
         task_logger.exception("Fine-tuning failed:")
     finally:
-        _send_callback(callback_url, req_id, status, error, task_logger)
+        # _send_callback(callback_url, req_id, status, error, task_logger)
+        archive_dir  = os.path.join(archive_root, str(f"run_{req_id}"))
+        shutil.copytree(work_dir, archive_dir, dirs_exist_ok=True)
         shutil.rmtree(work_dir)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -146,3 +166,4 @@ if __name__ == "__main__":
     chan.basic_consume(queue=QUEUE_NAME, on_message_callback=process_message)
     root_logger.info("Waiting for fine-tune requests…")
     chan.start_consuming()
+
