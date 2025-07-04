@@ -31,6 +31,11 @@ def extract_text_from_pdf(file_obj):
         print(f"PDF extraction failed: {e}")
         return ""
 
+def extract_llama3_answer(text):
+    if "<|assistant|>" in text:
+        return text.split("<|assistant|>")[-1].strip()
+    return text.strip()
+
 def get_file_path(input_list):
     user_prompt = ""
     file_path = None
@@ -51,17 +56,22 @@ def parse_input(input_list, is_vision_model=False):
     if not file_path:
         return user_prompt
 
-    if is_vision_model and is_image_file(file_path):
-        # For vision models: return multimodal chat format
-        return [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "url": file_path},
-                    {"type": "text", "text": user_prompt}
-                ]
-            }
-        ]
+    if is_vision_model:
+        if file_path and is_image_file(file_path):
+            # For vision models: return multimodal chat format
+            return [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "url": file_path},
+                        {"type": "text", "text": user_prompt}
+                    ]
+                }
+            ]
+        else:
+            # No image file provided for vision model
+            raise ValueError("No image file provided for vision model. Please upload an image with your prompt.")
+    
     elif not is_vision_model: 
         # For text models: append file contents to prompt
         try:
@@ -247,7 +257,20 @@ def main():
             handler = get_handler(model_path, device)
 
             if is_vision_handler(model_path):
-                parsed_prompt = parse_input(input_list, is_vision_model=True)
+                try:
+                    parsed_prompt = parse_input(input_list, is_vision_model=True)
+                except ValueError as ve:
+                    response = {
+                        "conversation_id": message.get("conversation_id"),
+                        "result": str(ve),
+                    }
+                    ch.basic_publish(
+                        exchange="",
+                        routing_key=output_queue,
+                        body=json.dumps(response),
+                    )
+                    ch.basic_ack(delivery_tag=method.delivery_tag)
+                    return 
             else:
                 parsed_prompt = parse_input(input_list, is_vision_model=False)
             
@@ -255,6 +278,7 @@ def main():
             generation_args = message.get("generation_args", handler.default_generation_args)
             print(f"Received prompt for model: {model_path}")
             result = handler.infer(parsed_prompt, **generation_args)
+            result = extract_llama3_answer(result)
             print(f"Result: {result!r}")
 
             response = {
