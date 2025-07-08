@@ -19,7 +19,6 @@ def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]])
     for i, ex in enumerate(examples, 1):
         prompt += f"Example {i}:\n"
         prompt += f"Q: {ex['question']}\n"
-        prompt += f"A: {ex['reasoning']}\n"
         prompt += f"Final Answer: {ex['answer']}\n\n"
     prompt += "Now answer the following:\n"
     prompt += f"Q: {task_instruction}\n"
