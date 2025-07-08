@@ -18,8 +18,8 @@ def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]])
     prompt = f"You are a helpful medical assistant specialising in {temp}. Use step-by-step reasoning.\n\n"
     for i, ex in enumerate(examples, 1):
         prompt += f"Example {i}:\n"
-        prompt += f"Q: {ex['question']}\n"
-        prompt += f"Final Answer: {ex['answer']}\n\n"
+        prompt += f"Question: {ex['question']}\n"
+        prompt += f"Answer: {ex['answer']}\n\n"
     prompt += "Now answer the following:\n"
     prompt += f"Q: {task_instruction}\n"
     prompt += "A: Let's think step by step.\n"
