@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir git+https://github.com/HabanaAI/DeepSpeed.git
 
 
 COPY download_model.py .
-COPY inference .
+COPY inference ./inference
 COPY start.sh .
 
 EXPOSE 8001
