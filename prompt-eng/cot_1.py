@@ -31,13 +31,14 @@ def zero_shot(task_description: str, input_text: str) -> str:
     Create a zero-shot prompt.
 
     Args:
-        task_description (str): What you want the model to do (e.g., "Translate to French").
+        task_description (str): What you want the model to do (for example, "Translate to French").
         input_text (str): The actual input to apply the task on.
 
     Returns:
         str: A zero-shot formatted prompt.
     """
-    return f"{task_description}:\n{input_text}\n"
+    prompt = "Lets think this through step by step" + "\n"
+    return prompt + f"{task_description}:\n{input_text}\n"
 
 
 def main():
