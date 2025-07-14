@@ -15,7 +15,7 @@ import json
 
 
 def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]]) -> str:
-    prompt = f"You are a helpful medical assistant specialising in {temp}. Use step-by-step reasoning.\n\n"
+    prompt = f"You are a helpful medical assistant specialising in... Use step-by-step reasoning.\n\n"
     for i, ex in enumerate(examples, 1):
         prompt += f"Example {i}:\n"
         prompt += f"Question: {ex['question']}\n"
@@ -70,7 +70,7 @@ def main():
             examples = msg.get('examples', [])
 
             if len(examples) > 0:
-                new_prompt = few_shot_cot_template("", examples)
+                new_prompt = few_shot_cot_template(orig_prompt, examples)
 
             else:
                 new_prompt = zero_shot(orig_prompt[0], orig_prompt[-1]) 
