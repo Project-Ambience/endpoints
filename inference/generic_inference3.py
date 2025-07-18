@@ -80,7 +80,7 @@ def extract_llama3_answer(text):
         return text.split("<|assistant|>")[-1].strip()
     return text.strip()
 
-def parse_input(input_list, is_vision_model=False): 
+def parse_input(message, is_vision_model=False): 
     input_list = message.get("input", [])
     file_path = message.get("file_url", None)
     prompt_text = compose_prompt(input_list)
@@ -327,7 +327,7 @@ def main():
             input_list = message["input"]
             base_model_path = message["base_model_path"]
             adapter_path = message.get("adapter_path")
-            device = "hpu"
+            device = "cpu"
 
             if not base_model_path or not isinstance(base_model_path, str):
                 print("Error: base_model_path is None or invalid in message:", message)
@@ -353,6 +353,8 @@ def main():
                     return 
             else:
                 parsed_prompt = parse_input(message, is_vision_model=False)
+            
+            print("Prompt sent to model:", parsed_prompt) 
             
             # Use handler's defaults unless message overrides
             generation_args = message.get("generation_args", handler.default_generation_args)
