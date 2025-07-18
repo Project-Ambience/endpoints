@@ -13,17 +13,18 @@ import json
 
 
 
-
-def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]]) -> str:
-    prompt = f"You are a helpful medical assistant specialising in... Use step-by-step reasoning.\n\n"
+def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]], model: str = "a medical model") -> str:
+    prompt = f"You are a helpful medical assistant using {model}. Use step-by-step reasoning.\n\n"
     for i, ex in enumerate(examples, 1):
         prompt += f"Example {i}:\n"
-        prompt += f"Question: {ex['question']}\n"
-        prompt += f"Answer: {ex['answer']}\n\n"
+        prompt += f"Question: {ex['input']}\n"
+        prompt += f"Answer: {ex['output']}\n\n"
     prompt += "Now answer the following:\n"
     prompt += f"Q: {task_instruction}\n"
-    prompt += "A: Let's think step by step.\n"
+    prompt += "A: Let's think step by step."
     return prompt
+
+
 
 
 def zero_shot(task_description: str, input_text: str) -> str:
@@ -62,41 +63,57 @@ def main():
     channel.queue_declare(queue=input_queue, durable=True)
     channel.queue_declare(queue=output_queue, durable=True)
 
-
     def on_message(ch, method, properties, body):
         try:
             msg = json.loads(body)
-            orig_prompt = msg['input'][0]['prompt']
-            examples = msg.get('examples', [])
 
-            if len(examples) > 0:
-                new_prompt = few_shot_cot_template(orig_prompt, examples)
+            input_messages = msg.get("input", [])
+            file_url = msg.get("file_url")
+            few_shot_template = msg.get("few_shot_template")
+            base_model_path = msg.get("base_model_path")
+            adapter_path = msg.get("adapter_path")
 
+            # Extract the first user prompt
+            orig_prompt = None
+            for m in input_messages:
+                if m.get("role") == "user":
+                    orig_prompt = m.get("content")
+                    break
+
+            if not orig_prompt:
+                print("No user prompt found.")
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+                return
+
+            # Apply prompt engineering
+            if few_shot_template:
+                examples = few_shot_template[0].get("examples", [])
+                model_name = msg.get("model", "a medical model")
+                new_prompt = few_shot_cot_template(orig_prompt, examples, model=model_name)
             else:
-                new_prompt = zero_shot(orig_prompt[0], orig_prompt[-1]) 
+                new_prompt = zero_shot("Answer the question", orig_prompt)
 
+            # Modify message: update first user message content
+            for m in msg["input"]:
+                if m.get("role") == "user":
+                    m["content"] = new_prompt
+                    break
 
-            print(f"Original prompt: {orig_prompt}")
-            print(f"Engineered prompt:\n{new_prompt}")
+            # Remove few-shot data (optional)
+            msg.pop("few_shot_template", None)
 
-            # Update the prompt in message
-            msg['input'][0]['prompt'] = new_prompt
-
-            # Remove examples from the message
-            if 'examples' in msg:
-                del msg['examples']
-
-            # Publish to engineered_prompt queue
+            # Send updated message to output queue
             ch.basic_publish(
                 exchange='',
-                routing_key=output_queue,
+                routing_key='engineered_prompt',
                 body=json.dumps(msg)
             )
-            print(f"Published engineered prompt for conversation_id={msg.get('conversation_id')} to {output_queue}.")
+            print(f"✅ Processed and published for conversation_id={msg.get('conversation_id')}")
         except Exception as e:
-            print("Error processing message:", e)
+            print("❌ Error processing message:", e)
         finally:
             ch.basic_ack(delivery_tag=method.delivery_tag)
+
 
     channel.basic_consume(
         queue=input_queue,
