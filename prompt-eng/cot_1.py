@@ -99,8 +99,6 @@ def main():
                     m["content"] = new_prompt
                     break
 
-            # Remove few-shot data (optional)
-            msg.pop("few_shot_template", None)
 
             # Send updated message to output queue
             ch.basic_publish(
