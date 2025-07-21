@@ -19,26 +19,16 @@ connection = pika.BlockingConnection(
 channel = connection.channel()
 channel.queue_declare(queue=input_queue, durable=True)
 
-# New message format
+# Zero-shot message format
 message = {
-    "conversation_id": "test-123",
-    "file_url": "http://example.com/input.txt",
-    "few_shot_template": [
-        {
-            "name": "Symptom Explainer",
-            "description": "Medical reasoning template",
-            "examples": [
-                {"input": "What are the symptoms of flu?", "output": "Fever, cough, sore throat."},
-                {"input": "What are the symptoms of hypertension?", "output": "Headache, dizziness, and nosebleeds."}
-            ]
-        }
-    ],
+    "conversation_id": "test-456",
+    "file_url": None,
+    "few_shot_template": None,
     "input": [
-        {"role": "user", "content": "What are the symptoms of diabetes?"}
+        {"role": "user", "content": "What causes high blood pressure?"}
     ],
     "base_model_path": "/models/med42",
-    "adapter_path": "/models/adapters/med42-lora",
-    "speciality": "cancer"
+    "adapter_path": "/models/adapters/med42-lora"
 }
 
 channel.basic_publish(
@@ -47,6 +37,6 @@ channel.basic_publish(
     body=json.dumps(message)
 )
 
-print("✅ Test prompt sent.")
+print("✅ Zero-shot test prompt sent.")
 connection.close()
 
