@@ -37,7 +37,8 @@ message = {
         {"role": "user", "content": "What are the symptoms of diabetes?"}
     ],
     "base_model_path": "/models/med42",
-    "adapter_path": "/models/adapters/med42-lora"
+    "adapter_path": "/models/adapters/med42-lora",
+    "speciality": "cancer"
 }
 
 channel.basic_publish(
