@@ -13,8 +13,8 @@ import json
 
 
 
-def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]], model: str = "a medical model") -> str:
-    prompt = f"You are a helpful medical assistant using {model}. Use step-by-step reasoning.\n\n"
+def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]], speciality: str,  model: str = "a medical model") -> str:
+    prompt = f"You are a helpful medical assistant using {model} that specialises in {speciality}. Use step-by-step reasoning.\n\n"
     for i, ex in enumerate(examples, 1):
         prompt += f"Example {i}:\n"
         prompt += f"Question: {ex['input']}\n"
@@ -72,6 +72,7 @@ def main():
             few_shot_template = msg.get("few_shot_template")
             base_model_path = msg.get("base_model_path")
             adapter_path = msg.get("adapter_path")
+            speciality = msg.get("speciality")
 
             # Extract the first user prompt
             orig_prompt = None
@@ -89,7 +90,7 @@ def main():
             if few_shot_template:
                 examples = few_shot_template[0].get("examples", [])
                 model_name = msg.get("model", "a medical model")
-                new_prompt = few_shot_cot_template(orig_prompt, examples, model=model_name)
+                new_prompt = few_shot_cot_template(orig_prompt, examples, speciality, model=model_name)
             else:
                 new_prompt = zero_shot("Answer the question", orig_prompt)
 
