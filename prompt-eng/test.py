@@ -37,7 +37,11 @@ message = {
         {"role": "user", "content": "What are the symptoms of diabetes?"}
     ],
     "base_model_path": "/models/med42",
-    "adapter_path": "/models/adapters/med42-lora",
+<<<<<<< HEAD
+    "adapter_path": "/models/adapters/med42-lora"
+=======
+    "adapter_path": "/models/adapters/med42-lora"
+>>>>>>> bf4b86e (changes to support new format by william)
     "speciality": "cancer"
 }
 

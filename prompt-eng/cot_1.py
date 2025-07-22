@@ -14,7 +14,11 @@ import json
 
 
 def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]], speciality: str,  model: str = "a medical model") -> str:
-    prompt = f"You are a helpful medical assistant using {model} that specialises in {speciality}. Use step-by-step reasoning.\n\n"
+    if speciality is not None:
+        prompt = f"You are a helpful medical assistant using {model} that specialises in {speciality}. Use step-by-step reasoning.\n\n"
+
+    else:
+        prompt = f"You are a helpful medical assistant using {model}. Use step-by-step reasoning.\n\n"
     for i, ex in enumerate(examples, 1):
         prompt += f"Example {i}:\n"
         prompt += f"Question: {ex['input']}\n"
@@ -27,7 +31,7 @@ def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]],
 
 
 
-def zero_shot(task_description: str, input_text: str) -> str:
+def zero_shot(task_description: str, speciality: str, input_text: str) -> str:
     """
     Create a zero-shot prompt.
 
@@ -38,7 +42,12 @@ def zero_shot(task_description: str, input_text: str) -> str:
     Returns:
         str: A zero-shot formatted prompt.
     """
-    prompt = "Lets think this through step by step" + "\n"
+    if speciality is not None:
+        prompt = "Lets think this through step by step, you are a medical model specialising in {speciality}" + "\n"
+
+    else:
+        prompt = "Lets think this through step by step" + "\n"
+
     return prompt + f"{task_description}:\n{input_text}\n"
 
 
@@ -88,11 +97,11 @@ def main():
 
             # Apply prompt engineering
             if few_shot_template:
-                examples = few_shot_template[0].get("examples", [])
+                examples = few_shot_template.get("examples", [])
                 model_name = msg.get("model", "a medical model")
                 new_prompt = few_shot_cot_template(orig_prompt, examples, speciality, model=model_name)
             else:
-                new_prompt = zero_shot("Answer the question", orig_prompt)
+                new_prompt = zero_shot("Answer the question", speciality, orig_prompt)
 
             # Modify message: update first user message content
             for m in msg["input"]:
