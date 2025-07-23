@@ -29,6 +29,15 @@ def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]],
     return prompt
 
 
+def few_shot(task_instruction: str, examples: List[Dict[str, str]]) -> str:
+    for i, ex in enumerate(examples, 1):
+        prompt += f"Example {i}:\n"
+        prompt += f"Question: {ex['input']}\n"
+        prompt += f"Answer: {ex['output']}\n\n"
+    prompt += "Now answer the following:\n"
+    prompt += f"Q: {task_instruction}\n"
+    prompt += "A: Let's think step by step."
+    return prompt
 
 
 def zero_shot(task_description: str, speciality: str, input_text: str) -> str:
@@ -82,6 +91,8 @@ def main():
             base_model_path = msg.get("base_model_path")
             adapter_path = msg.get("adapter_path")
             speciality = msg.get("speciality")
+            cot = msg.get("CoT")
+            few_shot = msg.get("few_shot")
 
             # Extract the first user prompt
             orig_prompt = None
@@ -96,12 +107,19 @@ def main():
                 return
 
             # Apply prompt engineering
-            if few_shot_template:
+            if few_shot:
                 examples = few_shot_template.get("examples", [])
                 model_name = msg.get("model", "a medical model")
-                new_prompt = few_shot_cot_template(orig_prompt, examples, speciality, model=model_name)
-            else:
+                if cot:
+                    new_prompt = few_shot_cot_template(orig_prompt, examples, speciality, model=model_name)
+
+                new_prompt = few_shot(orig_prompt, examples)
+
+            elif cot:
                 new_prompt = zero_shot("Answer the question", speciality, orig_prompt)
+                
+            else:
+                new_prompt = orig_prompt
 
             # Modify message: update first user message content
             for m in msg["input"]:
