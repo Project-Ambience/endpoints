@@ -134,13 +134,13 @@ def main():
             if rag:
                 ch.basic_publish(
                         exchange='',
-                        routing_key='rag_prompt',
+                        routing_key=rag_queue,
                         body=json.dumps(msg)
                         )
             else:
                 ch.basic_publish(
                         exchange='',
-                        routing_key='engineered_prompt',
+                        routing_key=output_queue,
                         body=json.dumps(msg)
                         )
             print(f"✅ Processed and published for conversation_id={msg.get('conversation_id')}")
