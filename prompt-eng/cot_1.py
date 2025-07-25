@@ -68,7 +68,7 @@ def main():
     rabbitmq_pass = "guest"
     input_queue = "user_prompts"
     output_queue = 'engineered_prompt'
-
+    rag_queue = 'raq_prompt'
     credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
@@ -80,6 +80,7 @@ def main():
     channel = connection.channel()
     channel.queue_declare(queue=input_queue, durable=True)
     channel.queue_declare(queue=output_queue, durable=True)
+    channel.queue_declare(queue=rag_queue, durable=True)
 
     def on_message(ch, method, properties, body):
         try:
@@ -93,6 +94,7 @@ def main():
             speciality = msg.get("speciality")
             cot = msg.get("CoT")
             few_shot = msg.get("few_shot")
+            rag = msg.get("RAG")
 
             # Extract the first user prompt
             orig_prompt = None
@@ -129,11 +131,18 @@ def main():
 
 
             # Send updated message to output queue
-            ch.basic_publish(
-                exchange='',
-                routing_key='engineered_prompt',
-                body=json.dumps(msg)
-            )
+            if rag:
+                ch.basic_publish(
+                        exchange='',
+                        routing_key='rag_prompt',
+                        body=json.dumps(msg)
+                        )
+            else:
+                ch.basic_publish(
+                        exchange='',
+                        routing_key='engineered_prompt',
+                        body=json.dumps(msg)
+                        )
             print(f"✅ Processed and published for conversation_id={msg.get('conversation_id')}")
         except Exception as e:
             print("❌ Error processing message:", e)
