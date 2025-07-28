@@ -29,7 +29,8 @@ def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]],
     return prompt
 
 
-def few_shot(task_instruction: str, examples: List[Dict[str, str]]) -> str:
+def few_shot_prompt(task_instruction: str, examples: List[Dict[str, str]]) -> str:
+    prompt = ""
     for i, ex in enumerate(examples, 1):
         prompt += f"Example {i}:\n"
         prompt += f"Question: {ex['input']}\n"
@@ -68,7 +69,7 @@ def main():
     rabbitmq_pass = "guest"
     input_queue = "user_prompts"
     output_queue = 'engineered_prompt'
-    rag_queue = 'raq_prompt'
+    rag_queue = 'rag_prompt'
     credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
@@ -110,12 +111,12 @@ def main():
 
             # Apply prompt engineering
             if few_shot:
-                examples = few_shot_template.get("examples", [])
+                examples = few_shot_template[0].get("examples", []) if few_shot_template else []
                 model_name = msg.get("model", "a medical model")
                 if cot:
                     new_prompt = few_shot_cot_template(orig_prompt, examples, speciality, model=model_name)
 
-                new_prompt = few_shot(orig_prompt, examples)
+                new_prompt = few_shot_prompt(orig_prompt, examples)
 
             elif cot:
                 new_prompt = zero_shot("Answer the question", speciality, orig_prompt)
