@@ -38,7 +38,10 @@ message = {
     ],
     "base_model_path": "/models/med42",
     "adapter_path": "/models/adapters/med42-lora",
-    "speciality": "cancer"
+    "speciality": "cancer",
+    "CoT": True,
+    "few_shot": True,
+    "RAG": True
 }
 
 channel.basic_publish(

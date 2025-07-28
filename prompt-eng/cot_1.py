@@ -29,6 +29,16 @@ def few_shot_cot_template(task_instruction: str, examples: List[Dict[str, str]],
     return prompt
 
 
+def few_shot_prompt(task_instruction: str, examples: List[Dict[str, str]]) -> str:
+    prompt = ""
+    for i, ex in enumerate(examples, 1):
+        prompt += f"Example {i}:\n"
+        prompt += f"Question: {ex['input']}\n"
+        prompt += f"Answer: {ex['output']}\n\n"
+    prompt += "Now answer the following:\n"
+    prompt += f"Q: {task_instruction}\n"
+    prompt += "A: Let's think step by step."
+    return prompt
 
 
 def zero_shot(task_description: str, speciality: str, input_text: str) -> str:
@@ -59,7 +69,7 @@ def main():
     rabbitmq_pass = "guest"
     input_queue = "user_prompts"
     output_queue = 'engineered_prompt'
-
+    rag_queue = 'rag_prompt'
     credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
@@ -71,6 +81,7 @@ def main():
     channel = connection.channel()
     channel.queue_declare(queue=input_queue, durable=True)
     channel.queue_declare(queue=output_queue, durable=True)
+    channel.queue_declare(queue=rag_queue, durable=True)
 
     def on_message(ch, method, properties, body):
         try:
@@ -82,6 +93,9 @@ def main():
             base_model_path = msg.get("base_model_path")
             adapter_path = msg.get("adapter_path")
             speciality = msg.get("speciality")
+            cot = msg.get("CoT")
+            few_shot = msg.get("few_shot")
+            rag = msg.get("RAG")
 
             # Extract the first user prompt
             orig_prompt = None
@@ -96,12 +110,19 @@ def main():
                 return
 
             # Apply prompt engineering
-            if few_shot_template:
-                examples = few_shot_template.get("examples", [])
+            if few_shot:
+                examples = few_shot_template[0].get("examples", []) if few_shot_template else []
                 model_name = msg.get("model", "a medical model")
-                new_prompt = few_shot_cot_template(orig_prompt, examples, speciality, model=model_name)
-            else:
+                if cot:
+                    new_prompt = few_shot_cot_template(orig_prompt, examples, speciality, model=model_name)
+
+                new_prompt = few_shot_prompt(orig_prompt, examples)
+
+            elif cot:
                 new_prompt = zero_shot("Answer the question", speciality, orig_prompt)
+                
+            else:
+                new_prompt = orig_prompt
 
             # Modify message: update first user message content
             for m in msg["input"]:
@@ -111,11 +132,18 @@ def main():
 
 
             # Send updated message to output queue
-            ch.basic_publish(
-                exchange='',
-                routing_key='engineered_prompt',
-                body=json.dumps(msg)
-            )
+            if rag:
+                ch.basic_publish(
+                        exchange='',
+                        routing_key=rag_queue,
+                        body=json.dumps(msg)
+                        )
+            else:
+                ch.basic_publish(
+                        exchange='',
+                        routing_key=output_queue,
+                        body=json.dumps(msg)
+                        )
             print(f"✅ Processed and published for conversation_id={msg.get('conversation_id')}")
         except Exception as e:
             print("❌ Error processing message:", e)
