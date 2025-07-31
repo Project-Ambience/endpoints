@@ -20,12 +20,12 @@ RUN pip install --no-cache-dir git+https://github.com/HabanaAI/DeepSpeed.git
 
 COPY download_model.py .
 COPY inference ./inference
-COPY start.sh .
+COPY start_download.sh .
+COPY start_inference.sh .
+COPY start_finetune.sh .
+
+RUN chmod +x start_download.sh start_inference.sh start_finetune.sh
 
 EXPOSE 8001
-
-RUN chmod +x start.sh
-
-CMD ["bash", "start.sh"]
 
 
