@@ -9,11 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-RUN git clone https://github.com/huggingface/optimum-habana.git /app/optimum-habana && \
-    cd /app/optimum-habana && \
-    python3 setup.py install && \
-    cd examples/language-modeling && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir optimum-habana==1.18.0
 
 RUN pip install --no-cache-dir git+https://github.com/HabanaAI/DeepSpeed.git
 
