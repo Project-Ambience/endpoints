@@ -291,7 +291,7 @@ def main():
     rabbitmq_port = 5672
     rabbitmq_user = "guest"
     rabbitmq_pass = "guest"
-    input_queue = "user_prompts"
+    input_queue = "engineered_prompt"
     output_queue = "inference_results"
 
     credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
@@ -327,7 +327,7 @@ def main():
             input_list = message["input"]
             base_model_path = message["base_model_path"]
             adapter_path = message.get("adapter_path")
-            device = "cpu"
+            device = "hpu"
 
             if not base_model_path or not isinstance(base_model_path, str):
                 print("Error: base_model_path is None or invalid in message:", message)
