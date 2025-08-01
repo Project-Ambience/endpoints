@@ -93,8 +93,7 @@ def main():
             base_model_path = msg.get("base_model_path")
             adapter_path = msg.get("adapter_path")
             speciality = msg.get("speciality")
-            cot = msg.get("CoT")
-            few_shot = msg.get("few_shot")
+            cot = msg.get("cot") 
             rag = msg.get("RAG")
 
             # Extract the first user prompt
@@ -110,13 +109,14 @@ def main():
                 return
 
             # Apply prompt engineering
-            if few_shot:
-                examples = few_shot_template[0].get("examples", []) if few_shot_template else []
-                model_name = msg.get("model", "a medical model")
+            if few_shot_template and few_shot_template.get("examples"):
+                examples = few_shot_template.get("examples", [])
+                # model_name = msg.get("model", "a medical model")
+                model_name = base_model_path.split("/")[-1] if base_model_path else "a medical model"
                 if cot:
                     new_prompt = few_shot_cot_template(orig_prompt, examples, speciality, model=model_name)
-
-                new_prompt = few_shot_prompt(orig_prompt, examples)
+                else:
+                    new_prompt = few_shot_prompt(orig_prompt, examples)
 
             elif cot:
                 new_prompt = zero_shot("Answer the question", speciality, orig_prompt)
