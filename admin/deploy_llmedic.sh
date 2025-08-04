@@ -42,6 +42,11 @@ docker ps --filter "name=download_service"
 docker ps --filter "name=inference_service"
 docker ps --filter "name=finetuning_service"
 
+# Step 9: Set up persistent log collection
+echo "🛠 Running log collector setup..."
+chmod +x /endpoints/admin/setup_log_services.sh
+/endpoints/admin/setup_log_services.sh
+
 # --- Step 7: Start background log collection
 echo "📝 Starting container log collection..."
 
