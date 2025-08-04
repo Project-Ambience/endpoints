@@ -1,55 +1,64 @@
 #!/bin/bash
 
+# ==============================================
+# LLMedic Gaudi-Compatible Deployment Script
+# Author: Your Name
+# Description:
+#   Deploys the LLMedic endpoint stack using your
+#   provided docker-compose.yml. Assumes a shared
+#   /shared/models and /shared/tmp.
+# ==============================================
 
 set -e
 
-echo "🚀 Deploying LLMedic Platform..."
+echo "🚀 Deploying LLMedic Services on Gaudi..."
 echo "----------------------------------------------"
 
-# Paths
+# --- Variables
 COMPOSE_FILE="./docker-compose.yml"
+MODEL_DIR="/shared/models"
+TMP_DIR="/shared/tmp"
 LOG_DIR="/var/log/llmedic"
-MODEL_DIR="/opt/llmedic/models"
-BACKUP_DIR="/opt/llmedic/backups"
 
-# Step 1: Confirm docker-compose file exists
+# --- Step 1: Check for docker-compose.yml
 if [ ! -f "$COMPOSE_FILE" ]; then
-  echo "❌ Error: docker-compose.yml not found in current directory."
+  echo "❌ Error: docker-compose.yml not found in $(pwd)"
   exit 1
 fi
 
-# Step 2: Create necessary directories
-echo "📁 Creating necessary directories..."
-mkdir -p "$LOG_DIR"
+# --- Step 2: Prepare directories
+echo "📁 Ensuring shared directories exist..."
 mkdir -p "$MODEL_DIR"
-mkdir -p "$BACKUP_DIR"
+mkdir -p "$TMP_DIR"
+mkdir -p "$LOG_DIR"
 
-# Step 3: Set permissions
-echo "🔒 Setting directory permissions..."
-chown -R $USER:$USER "$LOG_DIR" "$MODEL_DIR" "$BACKUP_DIR"
+echo "🔒 Setting permissions..."
+chown -R $USER:$USER "$MODEL_DIR" "$TMP_DIR" "$LOG_DIR"
 
-# Step 4: Pull images (optional)
-echo "📦 Pulling Docker images (if needed)..."
-docker-compose pull
+# --- Step 3: Clean up stale containers
+echo "🧹 Cleaning up any stale containers..."
+docker compose down || true
 
-# Step 5: Launch containers
-echo "🐳 Starting LLMedic services using Docker Compose..."
-docker-compose up -d
+# --- Step 4: Pull or rebuild images
+echo "📦 Ensuring latest images are available..."
+docker compose pull || true
 
-# Step 6: Wait for services to initialise
-echo "⏳ Waiting briefly for containers to start..."
+# --- Step 5: Start services
+echo "🐳 Starting services using Docker Compose..."
+docker compose up -d
+
+# --- Step 6: Wait and check container status
 sleep 10
+echo "🔍 Verifying LLMedic container status..."
+docker ps --filter "name=download_service"
+docker ps --filter "name=inference_service"
+docker ps --filter "name=finetuning_service"
 
-# Step 7: Check running containers
-echo "🔍 Checking status of LLMedic containers..."
-docker ps --filter "name=llmedic"
-
-
-# Step 8: Final summary
+# --- Step 7: Final Summary
 echo "----------------------------------------------"
-echo "✅ LLMedic deployed successfully!"
-echo "• Logs: $LOG_DIR"
-echo "• Models: $MODEL_DIR"
-echo "• Backups: $BACKUP_DIR"
-echo "To view logs: docker logs <container_name>"
+echo "✅ LLMedic deployed successfully on Gaudi!"
+echo "• Models dir: $MODEL_DIR"
+echo "• Temp dir: $TMP_DIR"
+echo "• Logs dir:  $LOG_DIR"
+echo "To interact with a container: docker exec -it <container_name> bash"
 
