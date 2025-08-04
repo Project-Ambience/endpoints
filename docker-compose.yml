@@ -20,6 +20,7 @@ services:
     image: services
     container_name: inference_service
     # command: ["./start_inference.sh"]
+    command: ["/bin/bash", "-c", "tail -f /dev/null"]
     runtime: habana
     environment:
       - HABANA_VISIBLE_DEVICES=all
@@ -35,6 +36,7 @@ services:
     image: services
     container_name: finetuning_service
     # command: ["./start_finetune.sh"]
+    command: ["/bin/bash", "-c", "tail -f /dev/null"]
     runtime: habana
     environment:
       - HABANA_VISIBLE_DEVICES=all
