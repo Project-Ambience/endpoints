@@ -1,13 +1,5 @@
 #!/bin/bash
 
-# ==============================================
-# LLMedic Gaudi-Compatible Deployment Script
-# Author: Your Name
-# Description:
-#   Deploys the LLMedic endpoint stack using your
-#   provided docker-compose.yml. Assumes a shared
-#   /shared/models and /shared/tmp.
-# ==============================================
 
 set -e
 
@@ -28,37 +20,41 @@ fi
 
 # --- Step 2: Prepare directories
 echo "📁 Ensuring shared directories exist..."
-mkdir -p "$MODEL_DIR"
-mkdir -p "$TMP_DIR"
-mkdir -p "$LOG_DIR"
-
-echo "🔒 Setting permissions..."
+mkdir -p "$MODEL_DIR" "$TMP_DIR" "$LOG_DIR"
 chown -R $USER:$USER "$MODEL_DIR" "$TMP_DIR" "$LOG_DIR"
 
 # --- Step 3: Clean up stale containers
-echo "🧹 Cleaning up any stale containers..."
+echo "🧹 Stopping any existing containers..."
 docker compose down || true
 
-# --- Step 4: Pull or rebuild images
-echo "📦 Ensuring latest images are available..."
+# --- Step 4: Pull images
+echo "📦 Pulling latest images..."
 docker compose pull || true
 
-# --- Step 5: Start services
-echo "🐳 Starting services using Docker Compose..."
+# --- Step 5: Start containers
+echo "🐳 Starting LLMedic services..."
 docker compose up -d
 
-# --- Step 6: Wait and check container status
+# --- Step 6: Wait and confirm services
 sleep 10
-echo "🔍 Verifying LLMedic container status..."
+echo "🔍 Checking container status..."
 docker ps --filter "name=download_service"
 docker ps --filter "name=inference_service"
 docker ps --filter "name=finetuning_service"
 
-# --- Step 7: Final Summary
+# --- Step 7: Start background log collection
+echo "📝 Starting container log collection..."
+
+# Kill any previous log collectors to avoid duplicates
+pkill -f "docker logs -f .*_service" || true
+
+docker logs -f download_service >> "$LOG_DIR/download.log" 2>&1 &
+docker logs -f inference_service >> "$LOG_DIR/inference.log" 2>&1 &
+docker logs -f finetuning_service >> "$LOG_DIR/finetune.log" 2>&1 &
+
 echo "----------------------------------------------"
-echo "✅ LLMedic deployed successfully on Gaudi!"
-echo "• Models dir: $MODEL_DIR"
-echo "• Temp dir: $TMP_DIR"
-echo "• Logs dir:  $LOG_DIR"
-echo "To interact with a container: docker exec -it <container_name> bash"
+echo "✅ Deployment complete. Logs are being saved to:"
+echo "  $LOG_DIR/download.log"
+echo "  $LOG_DIR/inference.log"
+echo "  $LOG_DIR/finetune.log"
 
