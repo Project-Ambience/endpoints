@@ -1,0 +1,47 @@
+services:
+  download_service:
+    image: services
+    container_name: download_service
+    command: ["./start_download.sh"]
+    runtime: habana
+    environment:
+      - HABANA_VISIBLE_DEVICES=all
+      - HF_HOME=/models
+    network_mode: host
+    ipc: host
+    cap_add:
+      - SYS_NICE
+    volumes:
+      - /shared/models:/models
+
+  inference_service:
+    image: services
+    container_name: inference_service
+    # command: ["./start_inference.sh"]
+    command: ["/bin/bash", "-c", "tail -f /dev/null"]
+    runtime: habana
+    environment:
+      - HABANA_VISIBLE_DEVICES=all
+      - HF_HOME=/models
+    network_mode: host
+    ipc: host
+    cap_add:
+      - SYS_NICE
+    volumes:
+      - /shared/models:/models
+
+  finetuning_service:
+    image: services
+    container_name: finetuning_service
+    # command: ["./start_finetune.sh"]
+    command: ["/bin/bash", "-c", "tail -f /dev/null"]
+    runtime: habana
+    environment:
+      - HABANA_VISIBLE_DEVICES=all
+      - HF_HOME=/models
+    network_mode: host
+    ipc: host
+    cap_add:
+      - SYS_NICE
+    volumes:
+      - /shared/models:/models
