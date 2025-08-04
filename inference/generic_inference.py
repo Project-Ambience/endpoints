@@ -10,6 +10,8 @@ import torch
 import mimetypes
 import requests
 from io import BytesIO
+from peft import PeftModel
+from safetensors.torch import load_file
 
 try:
     from PyPDF2 import PdfReader
@@ -20,6 +22,54 @@ try:
     from peft import PeftModel
 except ImportError:
     PeftModel = None
+    
+def fix_lora_weights(peft_model, adapter_path):
+    """Fix LoRA weights by manually loading from safetensors with correct key mapping"""
+    if load_file is None:
+        print("Safetensors not available, skipping LoRA weight fix")
+        return peft_model
+        
+    print("Fixing LoRA weights...")
+    
+    safetensors_path = f"{adapter_path}/adapter_model.safetensors"
+    
+    # Check if safetensors file exists
+    if not os.path.exists(safetensors_path):
+        print(f"Safetensors file not found: {safetensors_path}")
+        return peft_model
+    
+    try:
+        safetensors_weights = load_file(safetensors_path)
+        model_state = peft_model.state_dict()
+        loaded_count = 0
+        
+        for safe_key, weight in safetensors_weights.items():
+            model_key = safe_key.replace("._orig_mod", "").replace(".weight", ".default.weight")
+            if model_key in model_state:
+                with torch.no_grad():
+                    model_state[model_key].copy_(weight)
+                loaded_count += 1
+                if loaded_count <= 3:
+                    print(f"{safe_key} -> {model_key}")
+            else:
+                print(f"Key not found: {model_key}")
+        
+        print(f"Successfully loaded {loaded_count} LoRA weights")
+        
+        # Verify LoRA weights are properly loaded
+        print("\nVerifying LoRA weights:")
+        for name, param in peft_model.named_parameters():
+            if "lora_B" in name:
+                norm = param.data.norm().item()
+                print(f"  {name}: norm = {norm:.4f}")
+                if norm == 0:
+                    print("WARNING: Weight is still zero!")
+                break  # Just check first one
+                
+    except Exception as e:
+        print(f"Error fixing LoRA weights: {e}")
+    
+    return peft_model
 
 def is_image_file(filepath):
     mime, _ = mimetypes.guess_type(filepath)
@@ -135,19 +185,28 @@ class PipelineHandler:
     def __init__(self, base_model_path, device, adapter_path=None):
         if adapter_path and PeftModel:
             # Load the base model and then apply the adapter
+            print(f"Loading base model for PEFT: {base_model_path}")
             self.model = AutoModelForCausalLM.from_pretrained(
                 base_model_path,
                 torch_dtype=torch.bfloat16,
                 device_map=device,
-                trust_remote_code=True
+                trust_remote_code=True,
+                low_cpu_mem_usage=True
             )
+            # Load the PEFT adapter
+            print(f"Loading PEFT adapter: {adapter_path}")
             self.model = PeftModel.from_pretrained(
                 self.model,
                 adapter_path,
                 torch_dtype=torch.bfloat16,
                 device_map=device
             )
+            # Apply the LoRA weight fix
+            self.model = fix_lora_weights(self.model, adapter_path)
+            self.model.eval()
+            
             self.tokenizer = AutoTokenizer.from_pretrained(base_model_path)
+            self.pipe = None
         else:
             self.pipe = hf_pipeline(
                 "text-generation",
@@ -156,6 +215,8 @@ class PipelineHandler:
                 device_map=device,
             )
             self.tokenizer = self.pipe.tokenizer
+            self.model = None
+
         self.adapter_path = adapter_path
         self.base_model_path = base_model_path
         self.device = device
@@ -171,27 +232,33 @@ class PipelineHandler:
         }
 
     def infer(self, prompt, **generation_args):
-        if self.adapter_path and PeftModel:
+        if not generation_args:
+            generation_args = self.default_generation_args
+            
+        if self.adapter_path and PeftModel and self.model:
             # For PeftModel, we need to tokenize the prompt first
-            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
+            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048, add_special_tokens=False)
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+            input_length = inputs["input_ids"].shape[1]
+            
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
                     max_new_tokens=generation_args.get("max_new_tokens", 512),
+                    min_new_tokens=generation_args.get("min_new_tokens", 10),
                     do_sample=generation_args.get("do_sample", True),
-                    temperature=generation_args.get("temperature", 0.4),
+                    temperature=generation_args.get("temperature", 0.7),
                     top_k=generation_args.get("top_k", 150),
                     top_p=generation_args.get("top_p", 0.75),
-                    pad_token_id=self.tokenizer.pad_token_id,
+                    pad_token_id=self.tokenizer.eos_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
                 )
-            generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            return generated[len(prompt):] if generated.startswith(prompt) else generated
+            
+            # Only decode the generated part 
+            generated = self.tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
+            return generated.strip()
         else:
-            # Use pipeline inference
-            if not generation_args:
-                generation_args = self.default_generation_args
+            # Use pipeline inference for non-PEFT models
             outputs = self.pipe(prompt, **generation_args)
             generated = outputs[0]["generated_text"]
             return generated[len(prompt):] if generated.startswith(prompt) else generated
@@ -200,18 +267,24 @@ class ChatHandler:
     def __init__(self, base_model_path, device, adapter_path=None):
         self.tokenizer = AutoTokenizer.from_pretrained(base_model_path)
         if adapter_path and PeftModel:
+            print(f"Loading base model for PEFT chat: {base_model_path}")
             model = AutoModelForCausalLM.from_pretrained(
                 base_model_path,
                 torch_dtype=torch.bfloat16,
                 device_map=device,
                 trust_remote_code=True
             )
+            print(f"Loading PEFT adapter for chat: {adapter_path}")
             model = PeftModel.from_pretrained(
                 model,
                 adapter_path,
                 torch_dtype=torch.bfloat16,
                 device_map=device
             )
+            # Apply the LoRA weight fix
+            model = fix_lora_weights(model, adapter_path)
+            model.eval()
+
             self.model = model
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
@@ -359,6 +432,9 @@ def main():
             # Use handler's defaults unless message overrides
             generation_args = message.get("generation_args", handler.default_generation_args)
             print(f"Received prompt for model: {base_model_path}")
+            if adapter_path:
+                print(f"Using adapter: {adapter_path}")
+
             result = handler.infer(parsed_prompt, **generation_args)
             result = extract_llama3_answer(result)
             print(f"Result: {result!r}")
@@ -375,6 +451,8 @@ def main():
             print("Result sent to output queue")
         except Exception as e:
             print("Error during inference or message handling:", e)
+            import traceback
+            traceback.print_exc()
         finally:
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
