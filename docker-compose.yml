@@ -52,6 +52,7 @@ services:
     container_name: prometheus
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/llmedic.rules.yml:/etc/prometheus/llmedic.rules.yml
     ports:
       - "9090:9090"
     network_mode: host
