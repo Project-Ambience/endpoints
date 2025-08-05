@@ -41,6 +41,8 @@ echo "🔍 Checking container status..."
 docker ps --filter "name=download_service"
 docker ps --filter "name=inference_service"
 docker ps --filter "name=finetuning_service"
+docker ps --filter "name=prometheus"
+docker ps --filter "name=node_exporter"
 
 # Step 9: Set up persistent log collection
 echo "🛠 Running log collector setup..."
