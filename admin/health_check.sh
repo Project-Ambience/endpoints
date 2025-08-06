@@ -74,6 +74,18 @@ else
   ERRORS+=("Cannot access huggingface.co. Check internet or firewall settings.")
 fi
 
+# ---- 8. Check model directory access
+MODEL_PATH="/shared/models"
+echo "🔍 Checking model path: $MODEL_PATH"
+if [ -d "$MODEL_PATH" ]; then
+  echo "✅ Model directory is accessible."
+elif [ -f "$MODEL_PATH" ]; then
+  echo "✅ Model file exists at $MODEL_PATH."
+else
+  ERRORS+=("Model path not found or inaccessible: $MODEL_PATH.")
+fi
+
+
 # ---- Final Summary
 echo "----------------------------------------------"
 if [ ${#ERRORS[@]} -eq 0 ]; then
