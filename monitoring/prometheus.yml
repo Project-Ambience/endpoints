@@ -7,5 +7,5 @@ rule_files:
 scrape_configs:
   - job_name: 'node_exporter'
     static_configs:
-      - targets: ['localhost:9100']
+      - targets: ['128.16.12.219:9100']
 
