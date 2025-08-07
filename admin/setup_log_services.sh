@@ -55,5 +55,28 @@ for name in "${services[@]}"; do
   sudo systemctl start llmedic-${name}-logs.service
 done
 
-echo "✅ All log collectors set up and running."
+
+echo " Setting up log rotation for LLMedic logs..."
+
+# Install logrotate if not already installed
+if ! command -v logrotate &> /dev/null; then
+  echo "📦 Installing logrotate..."
+  sudo apt-get update && sudo apt-get install -y logrotate
+fi
+
+# Create logrotate config
+cat <<EOF | sudo tee /etc/logrotate.d/llmedic > /dev/null
+${LOG_DIR}/*.log {
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    delaycompress
+    copytruncate
+}
+EOF
+
+echo "✅ Log rotation configured at /etc/logrotate.d/llmedic"
+
 
