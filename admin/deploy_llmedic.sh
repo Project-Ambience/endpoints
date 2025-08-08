@@ -47,7 +47,7 @@ docker ps --filter "name=node_exporter"
 # Step 9: Set up persistent log collection
 echo "🛠 Running log collector setup..."
 
-chmod +x /endpoints/admin/setup_log_services.sh
+chmod +x ./endpoints/admin/setup_log_services.sh
 ./endpoints/admin/setup_log_services.sh
 
 # --- Step 7: Start background log collection
