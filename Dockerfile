@@ -22,6 +22,7 @@ RUN pip install --no-cache-dir git+https://github.com/HabanaAI/DeepSpeed.git
 
 COPY download_model.py .
 COPY inference ./inference
+COPY prompt-eng ./prompt-eng
 COPY fine-tuning ./fine-tuning
 COPY start_download.sh .
 COPY start_inference.sh .
