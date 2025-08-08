@@ -203,10 +203,7 @@ class FineTuneProcessor:
             "--compile_from_sec_iteration",
             "--allow_unspec_int_on_nn_module", "True"
         ]
-        
-        # for module in target_modules:
-        #     cmd.extend(["--lora_target_modules", module])
-            
+                   
         if target_modules:
             cmd.append("--lora_target_modules")
             for m in target_modules:
@@ -214,20 +211,16 @@ class FineTuneProcessor:
 
         return cmd
         
-    def send_callback(self, url: str, req_id: str, status: str, error: Optional[str] = None,
-                     adapter_path: Optional[str] = None):
+    def send_callback(self, url: str, req_id: str, status: str, adapter_path: str, error: Optional[str] = None):
         
         payload = {
             "id": req_id,
             "status": status,
-            "timestamp": time.time()
+            "adapter_path": adapter_path
         }
         
         if error:
             payload["error"] = error
-            
-        if adapter_path:
-            payload["adapter_path"] = adapter_path
             
         try:
             response = requests.post(url, json=payload, timeout=CALLBACK_TIMEOUT)
@@ -256,7 +249,6 @@ class FineTuneProcessor:
         
         try:
             msg = json.loads(body.decode('utf-8'))
-            req_id = msg.get("fine_tune_request_id")
             
             is_valid, error_msg = self.validate_message(msg)
             if not is_valid:
@@ -264,6 +256,7 @@ class FineTuneProcessor:
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                 return
                 
+            req_id = msg.get("fine_tune_request_id")    
             model_path = msg.get("ai_model_path")
             raw_params = msg.get("parameters", "{}")
             examples = msg.get("fine_tune_data", [])
@@ -324,39 +317,9 @@ class FineTuneProcessor:
                 "PT_HPU_VERBOSE": "1"
             })
             
-            # task_logger.info("Starting Intel Gaudi fine-tuning...")
-            # task_logger.info(f"Command: {' '.join(cmd)}")
-            
-            # start_time = time.time()
-            # result = subprocess.run(
-            #     cmd,
-            #     cwd=work_dir,
-            #     env=env,
-            #     capture_output=True,
-            #     text=True,
-            #     timeout=FINE_TUNE_TIMEOUT
-            # )
-            
-            # duration = time.time() - start_time
-            # task_logger.info(f"Fine-tuning completed in {duration:.2f} seconds")
-            
-            # if result.stdout:
-            #     task_logger.info(f"STDOUT:\n{result.stdout}")
-            # if result.stderr:
-            #     task_logger.info(f"STDERR:\n{result.stderr}")
-                
-            # if result.returncode != 0:
-            #     error_msg = f"Fine-tuning failed with return code {result.returncode}"
-            #     task_logger.error(error_msg)
-            #     self.send_callback(callback_url, req_id, "fail", error_msg)
-            #     return
-
-# =======================================================================================================            
-
             task_logger.info("Starting Intel Gaudi fine-tuning (streaming logs)...")
             task_logger.info(f"Command: {' '.join(cmd)}")
 
-            # launch and stream stdout/stderr
             start_time = time.time()
             proc = subprocess.Popen(
                 cmd,
@@ -374,17 +337,12 @@ class FineTuneProcessor:
             task_logger.info(f"Fine-tuning finished in {duration:.2f} seconds with exit code {returncode}")
 
             if returncode != 0:
-                # error_msg = f"Fine-tuning failed with return code {returncode}"
-                # task_logger.error(error_msg)
-                # self.send_callback(callback_url, req_id, "fail", error_msg)
-                # return
                 error_msg = f"Fine-tuning failed with return code {returncode}"
                 task_logger.error(error_msg)
                 archive_run(suffix="_fail")
                 self.send_callback(callback_url, req_id, "fail", error_msg)
                 return
 
-# =======================================================================================================
 
             adapter_path = os.path.join(MODELS_ROOT, f"{safe_model_name}_{req_id}")
             
@@ -409,10 +367,6 @@ class FineTuneProcessor:
             task_logger.info("Fine-tuning completed successfully")
             
         except subprocess.TimeoutExpired:
-            # error_msg = f"Fine-tuning timed out after {FINE_TUNE_TIMEOUT} seconds"
-            # if task_logger:
-            #     task_logger.error(error_msg)
-            # self.send_callback(callback_url, req_id, "fail", error_msg)
             error_msg = f"Fine-tuning timed out after {FINE_TUNE_TIMEOUT} seconds"
             if task_logger:
                 task_logger.error(error_msg)
@@ -422,11 +376,10 @@ class FineTuneProcessor:
         except Exception as e:
             error_msg = f"Fine-tuning failed: {str(e)}"
             if task_logger:
-                # task_logger.exception("Fine-tuning failed with exception:")
-                task_logger.exception("Fine-tuning failed with exception:")
+                task_logger.exception(f"Fine-tuning failed with exception: {e}")
                 archive_run(suffix="_error")
             else:
-                self.logger.exception("Fine-tuning failed with exception:")
+                self.logger.exception(f"Fine-tuning failed with exception: {e}")
             self.send_callback(callback_url, req_id, "fail", error_msg)
             
         finally:
@@ -479,3 +432,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
