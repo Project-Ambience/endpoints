@@ -7,7 +7,7 @@ RUN dnf install -y git-lfs && \
 
 
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir optimum-habana==1.18.0
+    pip install --no-cache-dir optimum-habana==1.18.1
 
 
 COPY requirements.txt . 
@@ -22,6 +22,7 @@ RUN pip install --no-cache-dir git+https://github.com/HabanaAI/DeepSpeed.git
 
 COPY download_model.py .
 COPY inference ./inference
+COPY fine-tuning ./fine-tuning
 COPY start_download.sh .
 COPY start_inference.sh .
 COPY start_finetune.sh .
