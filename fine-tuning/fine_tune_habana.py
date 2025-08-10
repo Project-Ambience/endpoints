@@ -19,6 +19,10 @@ import signal
 
 
 RABBIT_URL = os.environ.get("RABBIT_URL", "amqp://guest:guest@128.16.12.219:5672/?heartbeat=0")
+START_SIGNAL_URL_TEMPLATE = os.environ.get(
+    "START_SIGNAL_URL_TEMPLATE",
+    "http://128.16.12.219:5091/api/model_fine_tune_requests/{request_id}/start_processing"
+)
 QUEUE_NAME = os.environ.get("QUEUE_NAME", "model_fine_tune_requests")
 ARCHIVE_ROOT = os.environ.get("ARCHIVE_ROOT", "/app/endpoints/fine-tuning/finetune_runs")
 MODELS_ROOT = os.environ.get("MODELS_ROOT", "/models")
@@ -61,6 +65,7 @@ class FineTuneProcessor:
         self.setup_logging()
         self.ensure_directories()
         
+
     def setup_logging(self):
         os.makedirs(LOG_DIR, exist_ok=True)
         logging.basicConfig(
@@ -73,6 +78,7 @@ class FineTuneProcessor:
         )
         self.logger = logging.getLogger(__name__)
         
+
     def ensure_directories(self):
         directories = [ARCHIVE_ROOT, MODELS_ROOT, LOG_DIR]
         for directory in directories:
@@ -84,6 +90,7 @@ class FineTuneProcessor:
             except Exception as e:
                 self.logger.error(f"Failed to create directory {directory}: {e}")
             
+
     def get_model_info(self, model_path: str) -> Tuple[str, List[str]]:
         try:
             model_name = Path(model_path).name.lower()
@@ -113,7 +120,8 @@ class FineTuneProcessor:
             safe_model_name = "unknown_model"
             target_modules = ['q_proj', 'v_proj']
             return safe_model_name, target_modules
-            
+
+
     def validate_message(self, msg: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         required_fields = ["fine_tune_request_id", "ai_model_path", "callback_url"]
         
@@ -129,6 +137,7 @@ class FineTuneProcessor:
             
         return True, None
         
+
     def prepare_training_data(self, examples: List[Dict], data_dir: str, req_id: str) -> Tuple[str, str]:
     
         train_file = os.path.join(data_dir, f"train_{req_id}.json")
@@ -155,6 +164,7 @@ class FineTuneProcessor:
         
         self.logger.info(f"Created training data: {len(train_data)} train, {len(val_data)} validation examples")
         return train_file, val_file
+        
         
     def build_training_command(self, config: FineTuneConfig, model_path: str, 
                              train_file: str, val_file: str, output_dir: str,
@@ -211,6 +221,7 @@ class FineTuneProcessor:
 
         return cmd
         
+
     def send_callback(self, url: str, req_id: str, status: str, adapter_path: str, error: Optional[str] = None):
         
         payload = {
@@ -230,6 +241,18 @@ class FineTuneProcessor:
             self.logger.error(f"Failed to send callback: {e}")
         except Exception as e:
             self.logger.error(f"Unexpected error sending callback: {e}")
+
+
+    def send_start_signal(self, req_id: str):
+        start_url = START_SIGNAL_URL_TEMPLATE.format(request_id=req_id)
+        try:
+            self.logger.info(f"Sending start-processing signal to {start_url}")
+            resp = requests.post(start_url, timeout=5)
+            resp.raise_for_status()
+            self.logger.info(f"Start-processing signal sent successfully: {resp.status_code}")
+        except Exception as e:
+            self.logger.error(f"Failed to send start-processing signal: {e}")
+
             
     def process_message(self, ch, method, props, body):
        
@@ -303,7 +326,6 @@ class FineTuneProcessor:
             
             train_file, val_file = self.prepare_training_data(examples, data_dir, req_id)
             
-            
             cmd = self.build_training_command(
                 config, model_path, train_file, val_file, output_dir, target_modules
             )
@@ -319,6 +341,7 @@ class FineTuneProcessor:
             
             task_logger.info("Starting Intel Gaudi fine-tuning (streaming logs)...")
             task_logger.info(f"Command: {' '.join(cmd)}")
+            self.send_start_signal(req_id)
 
             start_time = time.time()
             proc = subprocess.Popen(
