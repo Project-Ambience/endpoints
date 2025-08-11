@@ -8,11 +8,9 @@ API_URL="${API_URL:-http://localhost:8000/models/install}"
 MODEL_NAME="${MODEL_NAME:-sshleifer/tiny-distilroberta-base}"
 MODEL_ID="test-download-$(date +%s)"
 CALLBACK_URL="${CALLBACK_URL:-http://host.docker.internal:9999/fake_callback}"
-CONTAINER="${CONTAINER:-}"   # e.g. CONTAINER=download_service
+CONTAINER="${CONTAINER:-}"  
 
-# ── Helpers
 _model_suffix() {
-  # models--org--repo
   printf "models--%s\n" "${MODEL_NAME//\//--}"
 }
 
