@@ -47,3 +47,19 @@ services:
       - /shared/models:/models
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /shared/tmp:/tmp
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/llmedic.rules.yml:/etc/prometheus/llmedic.rules.yml
+    ports:
+      - "9090:9090"
+    network_mode: host
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    pid: "host"
+    network_mode: host
+

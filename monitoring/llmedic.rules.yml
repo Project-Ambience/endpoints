@@ -1,0 +1,31 @@
+groups:
+  - name: llmedic-alerts
+    rules:
+
+    - alert: LowDiskSpace
+      expr: node_filesystem_avail_bytes{mountpoint="/shared/models"} < 10 * 1024 * 1024 * 1024
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Disk space on /shared/models is below 10GB"
+        description: "Only {{ $value | printf \"%.2f\" }} bytes left on /shared/models"
+
+    - alert: LowMemory
+      expr: node_memory_MemAvailable_bytes < 1 * 1024 * 1024 * 1024
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Available memory is below 1GB"
+        description: "System memory is running low: {{ $value | printf \"%.2f\" }} bytes available"
+
+    - alert: NodeExporterDown
+      expr: up{job="node_exporter"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node Exporter is down"
+        description: "Prometheus cannot scrape Node Exporter metrics"
+
