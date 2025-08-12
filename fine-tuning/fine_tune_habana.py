@@ -352,6 +352,12 @@ class FineTuneProcessor:
                 stderr=subprocess.STDOUT,
                 text=True,
             )
+            try:
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+                task_logger.info("ACK sent to RabbitMQ")
+            except Exception as e:
+                task_logger.warning(f"Failed to acknowledge message: {e}")
+
             for line in proc.stdout:
                 task_logger.info(line.rstrip())
             returncode = proc.wait(timeout=FINE_TUNE_TIMEOUT)
@@ -363,7 +369,7 @@ class FineTuneProcessor:
                 error_msg = f"Fine-tuning failed with return code {returncode}"
                 task_logger.error(error_msg)
                 archive_run(suffix="_fail")
-                self.send_callback(callback_url, req_id, "fail", error_msg)
+                self.send_callback(callback_url, req_id, "fail", adapter_path="", error=error_msg)
                 return
 
 
@@ -394,7 +400,7 @@ class FineTuneProcessor:
             if task_logger:
                 task_logger.error(error_msg)
                 archive_run(suffix="_timeout")
-            self.send_callback(callback_url, req_id, "fail", error_msg)
+            self.send_callback(callback_url, req_id, "fail", adapter_path="", error=error_msg)
             
         except Exception as e:
             error_msg = f"Fine-tuning failed: {str(e)}"
@@ -403,7 +409,7 @@ class FineTuneProcessor:
                 archive_run(suffix="_error")
             else:
                 self.logger.exception(f"Fine-tuning failed with exception: {e}")
-            self.send_callback(callback_url, req_id, "fail", error_msg)
+            self.send_callback(callback_url, req_id, "fail", adapter_path="", error=error_msg)
             
         finally:
             if work_dir and os.path.exists(work_dir):
@@ -412,10 +418,6 @@ class FineTuneProcessor:
                 except Exception as e:
                     self.logger.warning(f"Failed to cleanup work directory {work_dir}: {e}")
                     
-            try:
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-            except Exception as e:
-                self.logger.error(f"Failed to acknowledge message: {e}")
 
 
 def signal_handler(signum, frame):
