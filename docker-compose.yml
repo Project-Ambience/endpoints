@@ -1,5 +1,6 @@
 services:
   download_service:
+    build: .
     image: services
     container_name: download_service
     command: ["./start_download.sh"]
@@ -15,10 +16,10 @@ services:
       - /shared/models:/models
 
   inference_service:
+    build: .
     image: services
     container_name: inference_service
-    # command: ["./start_inference.sh"]
-    command: ["/bin/bash", "-c", "tail -f /dev/null"]
+    command: ["./start_inference.sh"]
     runtime: habana
     environment:
       - HABANA_VISIBLE_DEVICES=all
@@ -31,10 +32,10 @@ services:
       - /shared/models:/models
 
   finetuning_service:
+    build: .
     image: services
     container_name: finetuning_service
-    # command: ["./start_finetune.sh"]
-    command: ["/bin/bash", "-c", "tail -f /dev/null"]
+    command: ["./start_finetune.sh"]
     runtime: habana
     environment:
       - HABANA_VISIBLE_DEVICES=all
