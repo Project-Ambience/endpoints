@@ -25,10 +25,11 @@ COPY inference ./inference
 COPY prompt-eng ./prompt-eng
 COPY fine-tuning ./fine-tuning
 COPY start_download.sh .
+COPY start_prompteng.sh .
 COPY start_inference.sh .
 COPY start_finetune.sh .
 
-RUN chmod +x start_download.sh start_inference.sh start_finetune.sh
+RUN chmod +x start_download.sh start_prompteng.sh start_inference.sh start_finetune.sh
 
 EXPOSE 8001
 
