@@ -31,6 +31,22 @@ services:
     volumes:
       - /shared/models:/models
 
+  prompteng_service:
+    build: .
+    image: services
+    container_name: prompteng_service
+    command: ["./start_prompteng.sh"]
+    runtime: habana
+    environment:
+      - HABANA_VISIBLE_DEVICES=all
+      - HF_HOME=/models
+    network_mode: host
+    ipc: host
+    cap_add:
+      - SYS_NICE
+    volumes:
+      - /shared/models:/models
+
   finetuning_service:
     build: .
     image: services
@@ -48,6 +64,7 @@ services:
       - /shared/models:/models
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /shared/tmp:/tmp
+  
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
