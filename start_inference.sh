@@ -1,2 +1,3 @@
 #!/bin/bash
-python inference/generic_inference.py
+set -euo pipefail
+exec python -u inference/generic_inference.py

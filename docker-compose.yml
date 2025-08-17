@@ -22,8 +22,9 @@ services:
     command: ["./start_inference.sh"]
     runtime: habana
     environment:
-      - HABANA_VISIBLE_DEVICES=all
+      - HABANA_VISIBLE_DEVICES=7
       - HF_HOME=/models
+      - PYTHONUNBUFFERED=1
     network_mode: host
     ipc: host
     cap_add:
