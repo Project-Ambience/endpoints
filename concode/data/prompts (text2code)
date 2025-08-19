@@ -1,1 +1,26 @@
+{
+  "input": "Generate source code of class member functions in Java based on given natural language description and class environment.\n\nDescription: Return the perimeter of the rectangle.\nClass Environment:\nprivate double width;\nprivate double height;",
+  "output": ""
+}
+
+{
+  "input": "Generate source code of class member functions in Java based on given natural language description and class environment.\n\nDescription: Set the email address of the user.\nClass Environment:\nprivate String email;",
+  "output": ""
+}
+
+{
+  "input": "Generate source code of class member functions in Java based on given natural language description and class environment.\n\nDescription: Decrease the balance by the given amount.\nClass Environment:\nprivate double balance;",
+  "output": ""
+}
+
+
+{
+  "input": "Generate source code of class member functions in Java based on given natural language description and class environment.\n\nDescription: Return true if the temperature is below freezing (0 degrees).\nClass Environment:\nprivate double temperature;",
+  "output": ""
+}
+
+{
+  "input": "Generate source code of class member functions in Java based on given natural language description and class environment.\n\nDescription: Reset the score back to zero.\nClass Environment:\nprivate int score;",
+  "output": ""
+}
 
