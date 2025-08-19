@@ -1,0 +1,24 @@
+{
+  "input": "public boolean isAdult() {\n    return age >= 18;\n}",
+  "output": ""
+}
+
+{
+  "input": "public void addScore(int value) {\n    score += value;\n}",
+  "output": ""
+}
+
+{
+  "input": "public double getArea() {\n    return width * height;\n}",
+  "output": ""
+}
+
+{
+  "input": "public void setFullName(String firstName, String lastName) {\n    this.fullName = firstName + \" \" + lastName;\n}",
+  "output": ""
+}
+
+{
+  "input": "public boolean isPasswordStrong() {\n    return password != null && password.length() >= 8;\n}",
+  "output": ""
+}
