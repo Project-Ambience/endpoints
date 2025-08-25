@@ -1,1 +1,43 @@
+# Python cache / compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
 venv/
+ENV/
+
+# Test / coverage outputs
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Hugging Face model cache (avoid committing large model files)
+huggingface/
+models/
+.cache/
+.hf_cache/
+*.bin
+*.safetensors
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# System / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+
