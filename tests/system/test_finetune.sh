@@ -3,7 +3,6 @@
 
 set -euo pipefail
 
-# -------- Config (override via env before running) --------
 WORKER_CONT="${WORKER_CONT:-finetuning_service}"
 RABBIT_CONT="${RABBIT_CONT:-web-demo-rabbitmq-1}"
 QUEUE_NAME="${QUEUE_NAME:-model_fine_tune_requests}"
@@ -11,7 +10,6 @@ MODEL_ID="${MODEL_ID:-sshleifer/tiny-gpt2}"
 # Same format/vhost the worker logs show (note %2F for '/')
 RABBIT_URL="${RABBIT_URL:-amqp://guest:guest@128.16.12.219:5672/%2F?heartbeat=0}"
 
-# Use a simple numeric RUN_ID that won't trip shells
 if [ $# -ge 1 ]; then
   RUN_ID="$1"
 else
@@ -19,7 +17,6 @@ else
   RUN_ID="$(date +%s)$$"
 fi
 
-# -------- Tiny helpers (no fancy bash features) --------
 say() { printf "%s\n" "$*"; }
 cyan()  { printf "\033[36m%s\033[0m\n" "$*"; }
 green() { printf "\033[32m%s\033[0m\n" "$*"; }
