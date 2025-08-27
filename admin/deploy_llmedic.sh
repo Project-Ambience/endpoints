@@ -10,7 +10,6 @@ MODE="${1:-dev}"
 echo "🚀 Deploying LLMedic backend + web-demo ($MODE)"
 echo "----------------------------------------------"
 
-# ---- Pick compose CLI (v2 or legacy)
 if command -v docker-compose >/dev/null 2>&1; then
   DC="docker-compose"
 else
