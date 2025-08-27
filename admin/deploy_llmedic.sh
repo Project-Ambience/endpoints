@@ -1,40 +1,43 @@
-
 #!/bin/bash
 # Unified deploy: LLMedic backend + Project-Ambience/web-demo (dev|prod)
-# Usage:
-#   ./deploy_all.sh dev
-#   ./deploy_all.sh prod
+# Usage: ./admin/deploy_llmedic.sh dev   OR   ./admin/deploy_llmedic.sh prod
 set -euo pipefail
 
-MODE="${1:-dev}"  
+MODE="${1:-dev}"   # dev | prod
+
 echo "🚀 Deploying LLMedic backend + web-demo ($MODE)"
 echo "----------------------------------------------"
 
+# --- Pick compose CLI (v2 or legacy)
 if command -v docker-compose >/dev/null 2>&1; then
   DC="docker-compose"
 else
   DC="docker compose"
 fi
 
-BACKEND_COMPOSE="./docker-compose.yml"
+# --- Resolve paths relative to this script (so you can run it from anywhere)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# --- Backend (current repo)
+BACKEND_COMPOSE="$REPO_ROOT/docker-compose.yml"
 MODEL_DIR="/shared/models"
 TMP_DIR="/shared/tmp"
 LOG_DIR="/var/log/llmedic"
 
-# ---- web-demo repo settings
-WEB_ROOT="/opt"                                 
-WEB_DIR="$WEB_ROOT/web-demo"
+# --- web-demo repo settings (use HOME to avoid /opt permission issues)
+WEB_DIR="${WEB_DIR:-$HOME/web-demo}"
 WEB_REPO_SSH="git@github.com:Project-Ambience/web-demo.git"
 WEB_REPO_HTTPS="https://github.com/Project-Ambience/web-demo.git"
 WEB_BRANCH="main"
 
-# ---- Dev compose files (from your teammate's script)
+# --- Dev compose files (from your teammate's script)
 DEV_RMQ_COMPOSE="$WEB_DIR/docker-compose.rabbitmq.yml"
 DEV_STACK_COMPOSE="$WEB_DIR/docker-compose.dev.yml"
-DEV_API_SERVICE="api"                           
+DEV_API_SERVICE="api"
 DEV_PORTS_INFO="Ports: 5090 (client), 5091 (API)"
 
-# ---- Prod compose + env
+# --- Prod compose + env (from web-demo repo)
 PROD_COMPOSE="$WEB_DIR/docker-compose.yml"
 PROD_API_SERVICE="api"
 PROD_ENV_SRC="$WEB_DIR/.env.prod"
@@ -53,9 +56,8 @@ git_clone_or_update() {
     git -C "$dir" pull --ff-only origin "$branch"
   else
     echo "📥 Cloning web-demo into $dir..."
-    sudo mkdir -p "$dir"
-    sudo chown -R "$USER:$USER" "$dir"
-    # Prefer SSH; fallback to HTTPS if SSH fails
+    mkdir -p "$dir"
+    # Try SSH first; fallback to HTTPS if SSH fails
     if git clone --branch "$branch" "$ssh_url" "$dir"; then
       :
     else
@@ -67,7 +69,7 @@ git_clone_or_update() {
 
 migrate_with_retries() {
   local compose_file="$1" project_flag="$2" service="$3"
-  local tries=5 delay=8
+  local tries=5 delay=8 ok=0
   echo "🗃️  Running DB migrations in service '$service'..."
   set +e
   for i in $(seq 1 "$tries"); do
@@ -76,18 +78,15 @@ migrate_with_retries() {
     sleep "$delay"
   done
   set -e
-  if [ "${ok:-0}" != "1" ]; then
-    echo "❌ Failed to run migrations after $tries attempts."
-    exit 1
-  fi
+  [ "$ok" -eq 1 ] || { echo "❌ Failed to run migrations after $tries attempts."; exit 1; }
 }
 
-# ---- Sanity checks
+# --- Sanity checks
 need docker
 need git
-[ -f "$BACKEND_COMPOSE" ] || { echo "❌ $BACKEND_COMPOSE not found in $(pwd)"; exit 1; }
+[ -f "$BACKEND_COMPOSE" ] || { echo "❌ $BACKEND_COMPOSE not found"; exit 1; }
 
-# ---- Prepare dirs
+# --- Prepare dirs
 echo "📁 Ensuring shared directories exist..."
 sudo mkdir -p "$MODEL_DIR" "$TMP_DIR" "$LOG_DIR"
 sudo chown -R "$USER:$USER" "$MODEL_DIR" "$TMP_DIR" "$LOG_DIR"
@@ -98,11 +97,8 @@ sudo chown -R "$USER:$USER" "$MODEL_DIR" "$TMP_DIR" "$LOG_DIR"
 echo "🧹 Stopping existing backend containers..."
 $DC -f "$BACKEND_COMPOSE" down || true
 
-echo "📦 Pulling latest backend images..."
-$DC -f "$BACKEND_COMPOSE" pull || true
-
-echo "🐳 Starting LLMedic backend services..."
-$DC -f "$BACKEND_COMPOSE" up -d
+echo "🐳 Building & starting LLMedic backend services..."
+$DC -f "$BACKEND_COMPOSE" up --build -d --remove-orphans
 
 sleep 8
 echo "🔍 Backend status:"
@@ -152,7 +148,9 @@ else
   exit 1
 fi
 
-
+# =======================
+# 3) Logs (optional tails)
+# =======================
 echo "📝 Starting container log collection..."
 pkill -f "docker logs -f .*_service" >/dev/null 2>&1 || true
 pkill -f "docker logs -f client"     >/dev/null 2>&1 || true
@@ -163,17 +161,16 @@ docker logs -f download_service   >> "$LOG_DIR/download.log"  2>&1 &
 docker logs -f inference_service  >> "$LOG_DIR/inference.log" 2>&1 &
 docker logs -f finetuning_service >> "$LOG_DIR/finetune.log"  2>&1 &
 
-for svc in client api; do
-  if [ "$MODE" = "dev" ]; then
-    sid="$($DC -f "${DEV_STACK_COMPOSE}" ps -q "$svc" 2>/dev/null || true)"
-  else
-    sid="$($DC -p "$PROD_PROJECT" -f "${PROD_COMPOSE}" ps -q "$svc" 2>/dev/null || true)"
-  fi
-  if [ -n "$sid" ]; then
-    docker logs -f "$sid" >> "$LOG_DIR/${svc}.log" 2>&1 &
-    echo "🗒  Tailing $svc → $LOG_DIR/${svc}.log"
-  fi
-done
+# web-demo logs (try common names)
+if [ "$MODE" = "dev" ]; then
+  sid_client="$($DC -f "$DEV_STACK_COMPOSE" ps -q client 2>/dev/null || true)"
+  sid_api="$($DC -f "$DEV_STACK_COMPOSE" ps -q api 2>/dev/null || true)"
+else
+  sid_client="$($DC -p "$PROD_PROJECT" -f "$PROD_COMPOSE" ps -q client 2>/dev/null || true)"
+  sid_api="$($DC -p "$PROD_PROJECT" -f "$PROD_COMPOSE" ps -q api 2>/dev/null || true)"
+fi
+[ -n "${sid_client:-}" ] && docker logs -f "$sid_client" >> "$LOG_DIR/client.log" 2>&1 & && echo "🗒  Tailing client → $LOG_DIR/client.log" || true
+[ -n "${sid_api:-}" ]    && docker logs -f "$sid_api"    >> "$LOG_DIR/api.log"    2>&1 & && echo "🗒  Tailing api → $LOG_DIR/api.log"       || true
 
 echo "----------------------------------------------"
 echo "✅ Deployment complete ($MODE). $PORTS_INFO"
