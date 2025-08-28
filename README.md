@@ -46,16 +46,6 @@ chmod +x ./admin/deploy_llmedic.sh
 ./admin/deploy_llmedic.sh dev
 ```
 
-## Run in local (with docker)
-
-```
-docker-compose -f docker-compose.rabbitmq.yml up --build
-docker-compose -f docker-compose.dev.yml up --build
-docker-compose -f docker-compose.dev.yml exec api bin/rails db:migrate
-(optional) docker-compose -f docker-compose.dev.yml exec api bin/rails db:seed
-```
-The app will available at port 5090
-
 ---
 
 ## Environment Variables for web service
