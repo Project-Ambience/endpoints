@@ -70,26 +70,3 @@ chmod +x ./admin/deploy_llmedic.sh
 
 ---
 
-## Environment Variables for web service
-
-Create a `.env` file in your project root:
-
-```
-RAILS_MASTER_KEY=
-MODEL_INSTALLER_SERVICE_PATH=http://128.16.12.219:8001/models/install
-MODEL_INSTALL_REQUEST_CALLBACK_PATH=http://128.16.12.219:5091/api/model_install_requests/update_status
-MODEL_FINE_TUNE_REQUEST_CALLBACK_PATH=http://128.16.12.219:5091/api/model_fine_tune_requests/update_status
-MODEL_FINE_TUNE_REQUEST_QUEUE_NAME=model_fine_tune_requests
-MODEL_FORMATTING_REQUEST_QUEUE_NAME=model_formatting_requests
-USER_PROMPT_QUEUE_NAME=user_prompts
-DOMAIN=128.16.12.219
-PORT=5091
-RABBITMQ_USERNAME=guest
-RABBITMQ_PASSWORD=guest
-RABBITMQ_PORT=5672
-REDIS_URL=redis://redis:6379/1
-RAG_DATA_ADDING_PATH=http://128.16.12.219:8000/documents/upload
-RAG_DATA_ADDING_API_KEY=
-```
-
-`Note:` in local change 128.16.12.219 into your host IP and also make change in REACT_APP_CABLE_URL (in docker-compose.dev.yml)
