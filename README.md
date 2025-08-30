@@ -10,6 +10,13 @@ different model outputs. LLMedic uses a modular microservices architecture for m
 robust handling of long-running operations. 
 
 ---
+## Requirements (Gaudi-2 only)
+
+LLMedic’s backend requires Intel Gaudi 2 (Habana HPU) with the Habana driver/runtime installed and Docker configured with runtime: habana.
+
+If you don't have a Gaudi 2 server, the backend services will not start.
+
+---
 
 ## Architecture Diagram
 
